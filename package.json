@@ -1,0 +1,41 @@
+{
+  "name": "recipe-system",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:domain": "vitest run src/domain",
+    "test:db": "vitest run db-tests",
+    "db:bundle": "node scripts/bundle-sql.mjs",
+    "seed:baseline": "python scripts/import_baseline.py"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@supabase/supabase-js": "^2.116.0",
+    "@tanstack/react-query": "^5.103.0",
+    "browser-image-compression": "^2.0.2",
+    "decimal.js": "^10.6.0",
+    "lucide-react": "^1.46.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^8.4.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^22.20.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  }
+}

@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --color-brand-50: #fbf5ec;
+  --color-brand-100: #f3e9c8;
+  --color-brand-200: #e8d3a8;
+  --color-brand-500: #a8432f;
+  --color-brand-600: #8f2e1f;
+  --color-brand-700: #7a1f16;
+  --color-brand-800: #5e1811;
+  --color-ink: #2b2522;
+  --color-muted: #6f6660;
+  --color-line: #e7e0d8;
+  --color-paper: #fdfbf8;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+/* 數字欄位不顯示上下箭頭，避免手機誤觸 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .print-card {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+  .print-avoid-break {
+    break-inside: avoid;
+  }
+}

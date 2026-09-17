@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+*.local
+# 真實配方與價格只放在本機，不進 repo（CLAUDE.md §8）
+private/
+supabase/setup-all.sql
+*.tsbuildinfo
