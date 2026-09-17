@@ -26,6 +26,8 @@
 | 9 | UI 元件自行撰寫（未使用 shadcn/ui、React Hook Form、vite-plugin-pwa） | 減少相依套件；PWA 安裝功能延後 |
 | 10 | 路由使用 HashRouter | Cloudflare Pages 或 GitHub Pages 都不需要設定網址改寫 |
 | 11 | 步驟照片要先儲存草案才能上傳 | 照片要掛在已存在的步驟上 |
+| 12 | 部署改為 GitHub Pages，原始碼公開（取代 §5.5 建議的 Cloudflare Pages） | 使用者選擇；真實菜單只放本機 `private/`，資料在 Supabase，受資料庫權限保護 |
+| 13 | 創辦人帳號在部署前由 Supabase 後台建立 | 「第一個註冊者成為創辦人」在公開網址上有被搶先註冊的風險 |
 
 ## 原「待確認事項」（已依預設值定案）
 

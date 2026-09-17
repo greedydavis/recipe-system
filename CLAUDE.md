@@ -6,10 +6,12 @@
 
 ## 目前階段
 
-**MVP 程式已完成第一版，尚未部署。**（2026-09-16）使用者對待確認事項回覆「照預設」。
+**MVP 程式已完成第一版，等 Supabase 設定好就會部署。**（2026-09-17）
 
 - 已完成：資料庫（migrations、RPC、凍結與稽核 trigger）、計算核心、所有 MVP 頁面、示範模式、基準版菜單匯入腳本
-- 尚未完成：建立 Supabase 正式專案、部署（需要使用者自己的帳號）、Playwright E2E、真實單價與克重回填、UAT
+- repo：**公開**的 https://github.com/greedydavis/recipe-system （使用者選擇公開原始碼）。推送 `main` 會觸發 `.github/workflows/deploy.yml`：先跑測試；repo 變數 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY` 都設定後，才會部署到 https://greedydavis.github.io/recipe-system/
+- 公開前把歷史壓成單一 commit；清理前的舊歷史只保留在本機標籤 `local/history-before-public`，**不要推送 tags**
+- 尚未完成：建立 Supabase 正式專案與創辦人帳號（使用者操作）、設定 repo 變數、Playwright E2E、真實單價與克重回填、UAT
 - 常用指令：`npm run dev`（本機，自動使用示範資料庫）、`npm test`、`npm run typecheck`、`npm run build`、`npm run db:bundle`、`npm run seed:baseline`
 
 ---
@@ -183,7 +185,7 @@ POS 串接；向供應商下單與採購流程；排班、薪資、會計；外�
 
 - 介面文字一律使用繁體中文（台灣用語）；程式識別字、資料表、enum 值用英文。
 - commit 訊息用繁體中文。
-- **repo 內不能出現真實的食譜配方、比例、進價或供應商聯絡資料。** seed 資料、測試資料、截圖一律使用虛構資料。
+- **repo 是公開的，repo 內不能出現真實的食譜配方、克重、比例、進價或供應商聯絡資料**；文件舉例時也不要寫真實菜名與份量。seed 資料、測試資料、截圖一律使用虛構資料。使用者已同意 `scripts/import_baseline.py` 裡的原物料名稱與別名清單公開。
 - 真實菜單只放在 `private/`（已列入 .gitignore）：`npm run seed:baseline` 讀取上一層資料夾的《餐廳菜單_完整試作與配方表.xlsx》，產生 `private/baseline-seed.json`，再到「更多 → 資料匯出與匯入」匯入。`vite build` 不會打包 `private/`；修改匯入流程後要確認 `dist/` 裡搜尋不到菜名。
 - 金鑰只能放 anon key；service role key 不能出現在前端或 repo。
 - 手機操作：點擊區至少 44px；數字欄位使用 `inputmode="decimal"`；主要動作放在畫面底部固定列；不依賴 hover。

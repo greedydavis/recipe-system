@@ -50,7 +50,7 @@ npm test
 
 ## 上線步驟
 
-目前還沒有部署。以下步驟需要用你自己的帳號操作。
+網站網址：https://greedydavis.github.io/recipe-system/ 。推送到 `main` 後，GitHub Actions 會先跑測試。Supabase 設定好之後才會自動部署；在那之前只跑測試，不會把示範模式放上正式網址。
 
 ### 1. 建立 Supabase 專案
 
@@ -67,34 +67,36 @@ npm test
    - 建議**關閉 Confirm email**：Supabase 內建寄信每小時只能寄少量信，團隊一起註冊很容易卡住
    - 新帳號本來就要由創辦人指派角色才能使用，所以關閉驗證信不會讓外人看到資料
 
-**第一個註冊的帳號會自動成為創辦人**，所以請創辦人先註冊。之後其他人註冊的帳號都是「待審核」，由創辦人到「更多 → 帳號與角色」指派角色。
+### 2. 先建立創辦人帳號（部署之前）
 
-### 2. 設定環境變數並建置
+**第一個註冊的帳號會自動成為創辦人。** 網站公開之後任何人都能打開註冊頁，所以要在部署前先建立創辦人帳號：
 
-建立 `.env.local`（不會進 git）：
+1. Supabase 後台 **Authentication → Users → Add user → Create new user**
+2. 填創辦人的 Email 與密碼，勾選 **Auto Confirm User**
 
-```
-VITE_SUPABASE_URL=https://xxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJ...
-```
+之後其他人自己註冊的帳號都是「待審核」，看不到任何資料，由創辦人到「更多 → 帳號與角色」指派角色。
 
-```bash
-npm run build
-```
+### 3. 設定 GitHub 變數，觸發部署
 
-`VITE_SUPABASE_ANON_KEY` 填 Publishable key（或舊的 anon key）。`dist/` 就是完整的網站。這把金鑰本來就是公開給前端使用的，資料安全由資料庫權限負責。Secret key（舊名 service role key）絕對不要放進前端或 repo。
+GitHub repo → **Settings → Secrets and variables → Actions → Variables** → 新增兩個 repository variables：
 
-### 3. 部署靜態網站
+| 名稱 | 值 |
+|---|---|
+| `VITE_SUPABASE_URL` | Project URL，例如 `https://xxxx.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | Publishable key（或舊的 anon key） |
 
-建議使用 **Cloudflare Pages**，因為私有 repo 也可以免費部署：
+設定完到 **Actions → 測試並部署到 GitHub Pages → Run workflow** 手動跑一次，或推送新的 commit。
 
-- Build command 填 `npm run build`
-- Output directory 填 `dist`
-- 環境變數填入上面兩個 `VITE_` 變數
+這把金鑰本來就是公開給前端使用的，資料安全由資料庫權限負責。**Secret key（舊名 service role key）絕對不要放進 GitHub、前端或 repo。**
 
-如果改用 GitHub Pages，免費方案的 repo 必須公開。程式碼會公開，但資料不會。
+本機要連正式資料庫時，改用 `.env.local`（不會進 git），填同樣兩個變數。
 
-網址使用 `#/` 路由，兩種託管方式都不需要另外設定網址改寫。
+### 4. 上線後檢查
+
+1. 用創辦人帳號登入，確認首頁正常
+2. 「更多 → 資料匯出與匯入 → 選擇 JSON 檔」，上傳本機的 `private/baseline-seed.json`，匯入基準版菜單
+3. 用手機開啟網站，上傳一張試做照片，確認照片可以看到
+4. 請其他成員註冊，由創辦人指派角色
 
 ## 備份
 
