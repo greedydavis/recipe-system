@@ -10,6 +10,7 @@ import { AuditPage, DataPage, MorePage, SettingsPage, UsersPage } from './pages/
 import { CardPage } from './pages/CardPage';
 import { ComparePage } from './pages/ComparePage';
 import { HomePage } from './pages/HomePage';
+import { ProgressPage } from './pages/ProgressPage';
 import { IngredientDetailPage, IngredientsPage, SupplierDetailPage, SuppliersPage } from './pages/IngredientPages';
 import { LoginPage, PendingPage } from './pages/LoginPage';
 import { RecipeDetailPage } from './pages/RecipeDetailPage';
@@ -59,6 +60,7 @@ const router = createHashRouter([
         element: <Layout />,
         children: [
           { index: true, element: <HomePage /> },
+          { path: 'progress', element: <ProgressPage /> },
           { path: 'recipes', element: <RecipesPage /> },
           { path: 'recipes/:id', element: <RecipeDetailPage /> },
           { path: 'versions/:id', element: <VersionPage /> },

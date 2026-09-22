@@ -2,6 +2,7 @@ import { AlertTriangle, ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useCosts } from '../app/costing';
+import { useProgress } from './ProgressPage';
 import { formatDate, formatDateTime } from '../app/format';
 import { useMe } from '../app/auth';
 import { Badge, Card, EmptyState, ErrorState, Loading, Section, StatusBadge } from '../components/ui';
@@ -59,6 +60,31 @@ function MyTasks({ tasks, loading }: { tasks?: MyTastingTask[]; loading: boolean
   );
 }
 
+function ProgressCard() {
+  const { summary, isLoading } = useProgress();
+  if (isLoading || summary.dishes.total === 0) return null;
+  const pct = Math.round((summary.dishes.locked / summary.dishes.total) * 100);
+  return (
+    <Link to="/progress" className="block">
+      <Card className="hover:bg-brand-50">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">籌備進度</div>
+            <div className="text-sm text-muted">
+              菜品 {summary.dishes.locked}／{summary.dishes.total} 已定版・元件 {summary.components.locked}／
+              {summary.components.total}・卡關 {summary.blockerCount} 項
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-100">
+              <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+          <ChevronRight className="size-5 shrink-0 text-stone-400" aria-hidden />
+        </div>
+      </Card>
+    </Link>
+  );
+}
+
 function KitchenDashboard({ data }: { data: Dashboard }) {
   const dishIds = (data.dish_cost_versions ?? []).map((d) => d.version_id);
   const costs = useCosts(dishIds);
@@ -69,6 +95,7 @@ function KitchenDashboard({ data }: { data: Dashboard }) {
 
   return (
     <div className="space-y-6">
+      <ProgressCard />
       <div className="grid grid-cols-3 gap-2">
         <Stat label="待核准" value={data.pending_approvals?.length ?? 0} to="#pending" />
         <Stat label="試菜中" value={data.testing_versions?.length ?? 0} to="#testing" />

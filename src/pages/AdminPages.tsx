@@ -40,6 +40,7 @@ export function MorePage() {
   });
 
   const links: Array<{ to: string; label: string; show: boolean }> = [
+    { to: '/progress', label: '籌備進度（各分類定版進度、卡關清單、成本總覽）', show: can.viewKitchen(me.role) },
     { to: '/suppliers', label: '供應商', show: can.editMaster(me.role) },
     { to: '/admin/users', label: '帳號與角色', show: can.admin(me.role) },
     { to: '/admin/settings', label: '系統設定（目標成本率、稅率）', show: can.viewKitchen(me.role) },
