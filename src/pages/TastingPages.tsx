@@ -26,6 +26,7 @@ import {
   Sheet,
   StatusBadge,
   Textarea,
+  cx,
   useToast,
 } from '../components/ui';
 import { rpc, useAction, useRpc } from '../data/api';
@@ -423,6 +424,10 @@ function TastingSession() {
   if (session.isLoading) return <Loading />;
   if (session.error || !session.data) return <ErrorState error={session.error} />;
   const s = session.data;
+  // 已停用的版本排到最後（排序穩定，其餘維持原本順序）
+  const items = [...s.items].sort(
+    (a, b) => Number(a.version_status === 'retired') - Number(b.version_status === 'retired'),
+  );
 
   return (
     <div className="space-y-6">
@@ -439,9 +444,9 @@ function TastingSession() {
       />
       {s.note && <Card className="text-sm whitespace-pre-wrap">{s.note}</Card>}
       <SessionSummary session={s} />
-      {s.items.length > 1 && <ComparisonTable items={s.items} />}
-      {s.items.length === 0 && <EmptyState title="這個場次還沒有試做項目">按右上角「加入項目」選要試做的版本。</EmptyState>}
-      {s.items.map((item) => (
+      {items.length > 1 && <ComparisonTable items={items} />}
+      {items.length === 0 && <EmptyState title="這個場次還沒有試做項目">按右上角「加入項目」選要試做的版本。</EmptyState>}
+      {items.map((item) => (
         <TastingItemCard key={item.id} item={item} team={team.data ?? []} />
       ))}
 
@@ -654,7 +659,7 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
   const myFeedback = item.feedback.find((f) => f.taster_id === me.id);
 
   return (
-    <Card className="space-y-3">
+    <Card className={cx('space-y-3', item.version_status === 'retired' && 'opacity-70')}>
       <div className="flex flex-wrap items-center gap-2">
         <Link to={`/versions/${item.version_id}`} className="text-lg font-semibold hover:underline">
           {item.recipe_name} v{item.version_no}
