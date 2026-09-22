@@ -280,6 +280,9 @@ export interface VersionDetail extends VersionSummary {
     blind_label: string;
     maker_name: string | null;
     deviation_note: string;
+    conclusion: string;
+    decision: TastingDecision | null;
+    session_summary: string;
     feedback_count: number;
     avg_overall: number | null;
     avg_saltiness: number | null;
@@ -312,6 +315,8 @@ export interface Feedback {
   can_edit: boolean;
 }
 
+export type TastingDecision = 'next_round' | 'adjust' | 'drop' | 'ready';
+
 export interface TastingSessionListItem {
   id: string;
   tasted_on: string;
@@ -319,6 +324,8 @@ export interface TastingSessionListItem {
   location: string;
   item_count: number;
   feedback_count: number;
+  has_summary: boolean;
+  decided_count: number;
   items: Array<{ recipe_name: string; version_no: number; blind_label: string }>;
 }
 
@@ -336,6 +343,8 @@ export interface TastingItemDetail {
   maker_name: string | null;
   maker_name_text: string;
   deviation_note: string;
+  conclusion: string;
+  decision: TastingDecision | null;
   assigned_testers: Array<{ id: string; display_name: string }>;
   photos: Photo[];
   feedback: Feedback[];
@@ -360,6 +369,7 @@ export interface TastingSessionDetail {
   title: string;
   location: string;
   note: string;
+  summary: string;
   created_by_name: string | null;
   items: TastingItemDetail[];
 }

@@ -40,7 +40,7 @@ import type {
   TeamMember,
 } from '../data/types';
 import { isReferenceable } from '../domain/status';
-import { MENU_READY_LABEL, OILINESS_LABELS, ROLE_LABEL, SALTINESS_LABELS } from '../i18n/labels';
+import { DECISION_LABEL, DECISION_TONE, MENU_READY_LABEL, OILINESS_LABELS, ROLE_LABEL, SALTINESS_LABELS } from '../i18n/labels';
 
 // ───────────────────────── 列表 ─────────────────────────
 
@@ -101,7 +101,14 @@ export function TastingsPage() {
                       {s.items.map((i) => `${i.recipe_name} v${i.version_no}${i.blind_label ? `（${i.blind_label}）` : ''}`).join('、')}
                     </div>
                   </div>
-                  <Badge>{s.feedback_count} 筆評分</Badge>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <Badge>{s.feedback_count} 筆評分</Badge>
+                    {s.has_summary ? (
+                      <Badge tone="ok">已寫總結</Badge>
+                    ) : (
+                      s.item_count > 0 && <Badge tone="warn">決議 {s.decided_count}／{s.item_count}</Badge>
+                    )}
+                  </div>
                   <ChevronRight className="size-5 text-stone-400" aria-hidden />
                 </Card>
               </Link>
@@ -431,6 +438,7 @@ function TastingSession() {
         }
       />
       {s.note && <Card className="text-sm whitespace-pre-wrap">{s.note}</Card>}
+      <SessionSummary session={s} />
       {s.items.length > 1 && <ComparisonTable items={s.items} />}
       {s.items.length === 0 && <EmptyState title="這個場次還沒有試做項目">按右上角「加入項目」選要試做的版本。</EmptyState>}
       {s.items.map((item) => (
@@ -503,6 +511,67 @@ function TastingSession() {
   );
 }
 
+/** 試菜後開會的結論，寫在場次層級 */
+function SessionSummary({ session }: { session: TastingSessionDetail }) {
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(session.summary);
+  const save = useAction(() => rpc('update_tasting_session', { p_id: session.id, p: { summary: text } }));
+  const decided = session.items.filter((i) => i.decision).length;
+
+  return (
+    <Section
+      title="試菜總結（會議紀錄）"
+      action={
+        !editing && (
+          <Button small variant="secondary" onClick={() => (setText(session.summary), setEditing(true))}>
+            {session.summary ? '編輯' : '開始記錄'}
+          </Button>
+        )
+      }
+    >
+      {editing ? (
+        <Card className="space-y-2">
+          <Textarea
+            aria-label="試菜總結"
+            rows={8}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={'今天討論出什麼結論？例如：\n・兩個湯底都往下一輪，魚高湯的腥味要再處理\n・麵量確定用 150 g\n・下一輪 9/30，採購由 Chris 負責'}
+          />
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setEditing(false)}>
+              取消
+            </Button>
+            <Button
+              className="flex-1"
+              loading={save.isPending}
+              onClick={() =>
+                save.mutate(undefined, {
+                  onSuccess: () => {
+                    toast('已儲存試菜總結');
+                    setEditing(false);
+                  },
+                  onError: (e) => toast(e.message, 'danger'),
+                })
+              }
+            >
+              儲存
+            </Button>
+          </div>
+        </Card>
+      ) : session.summary ? (
+        <Card className="whitespace-pre-wrap">{session.summary}</Card>
+      ) : (
+        <EmptyState title="還沒有會議紀錄">試菜後開會討論的結論寫在這裡，之後查得到當初為什麼這樣決定。</EmptyState>
+      )}
+      <p className="text-xs text-muted">
+        每個品項的決議寫在下面各自的卡片裡（{decided}／{session.items.length} 已填）。
+      </p>
+    </Section>
+  );
+}
+
 function ComparisonTable({ items }: { items: TastingItemDetail[] }) {
   return (
     <Card className="overflow-x-auto p-0">
@@ -556,11 +625,12 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
     assigned_tester_ids: item.assigned_testers.map((t) => t.id),
   });
 
-  const saveDeviation = useAction(() =>
-    rpc('update_tasting_item', {
-      p_id: item.id,
-      p: { deviation_note: deviation, ...assignmentPayload(currentAssignment()) },
-    }),
+  const [conclusion, setConclusion] = useState(item.conclusion);
+  const [editingConclusion, setEditingConclusion] = useState(false);
+
+  const saveDeviation = useAction(() => rpc('update_tasting_item', { p_id: item.id, p: { deviation_note: deviation } }));
+  const saveConclusion = useAction((p: { conclusion?: string; decision?: string | null }) =>
+    rpc('update_tasting_item', { p_id: item.id, p }),
   );
   const saveAssignment = useAction((value: ItemAssignment) =>
     rpc('update_tasting_item', { p_id: item.id, p: { deviation_note: item.deviation_note, ...assignmentPayload(value) } }),
@@ -571,6 +641,7 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
     const suggestions = item.feedback.map((f) => f.suggestions).filter(Boolean);
     const note = [
       `依 ${formatDate(new Date().toISOString())} 試菜回饋修改（v${item.version_no}，平均 ${formatScore(item.stats.avg_overall)} 分）`,
+      item.conclusion ? `會議結論：${item.conclusion}` : '',
       issues.length ? `問題：${issues.join('／')}` : '',
       suggestions.length ? `建議：${suggestions.join('／')}` : '',
     ]
@@ -590,6 +661,7 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
         </Link>
         {item.blind_label && <Badge>盲測 {item.blind_label}</Badge>}
         <StatusBadge status={item.version_status} />
+        {item.decision && <Badge tone={DECISION_TONE[item.decision]}>{DECISION_LABEL[item.decision]}</Badge>}
       </div>
       <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
         <span>
@@ -657,6 +729,65 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
           ))}
         </div>
       )}
+
+      <div className="space-y-2 rounded-xl bg-brand-50 p-3">
+        <div className="text-sm font-semibold">試菜結論</div>
+        <ChipGroup
+          label="決議"
+          value={item.decision}
+          allowClear
+          onChange={(v) =>
+            saveConclusion.mutate(
+              { decision: v },
+              { onSuccess: () => toast(v ? `已記錄：${DECISION_LABEL[v]}` : '已清除決議'), onError: (e) => toast(e.message, 'danger') },
+            )
+          }
+          options={Object.entries(DECISION_LABEL).map(([value, label]) => ({ value, label }))}
+        />
+        {editingConclusion ? (
+          <div className="space-y-2">
+            <Textarea
+              aria-label="結論與調整方向"
+              rows={3}
+              value={conclusion}
+              onChange={(e) => setConclusion(e.target.value)}
+              placeholder="例如：大骨增量 10%、鹽減 1 g，下一輪再比一次"
+            />
+            <div className="flex gap-2">
+              <Button small variant="secondary" onClick={() => (setConclusion(item.conclusion), setEditingConclusion(false))}>
+                取消
+              </Button>
+              <Button
+                small
+                loading={saveConclusion.isPending}
+                onClick={() =>
+                  saveConclusion.mutate(
+                    { conclusion },
+                    {
+                      onSuccess: () => {
+                        toast('已儲存結論');
+                        setEditingConclusion(false);
+                      },
+                      onError: (e) => toast(e.message, 'danger'),
+                    },
+                  )
+                }
+              >
+                儲存
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => (setConclusion(item.conclusion), setEditingConclusion(true))}
+            className="block min-h-11 w-full rounded-lg bg-white px-3 py-2 text-left text-sm hover:bg-white/70"
+          >
+            <span className="font-medium">結論與調整方向：</span>
+            {item.conclusion || <span className="text-muted">（點此記錄）</span>}
+          </button>
+        )}
+      </div>
 
       <div className="flex flex-wrap gap-2">
         {assignedToMe && item.version_status !== 'retired' && (

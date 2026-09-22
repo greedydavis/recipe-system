@@ -44,7 +44,7 @@ import {
 import { buildSnapshot } from '../domain/snapshot';
 import { type Transition, availableTransitions } from '../domain/status';
 import { dec } from '../domain/decimal';
-import { HEAT_LABEL, STATUS_LABEL } from '../i18n/labels';
+import { DECISION_LABEL, DECISION_TONE, HEAT_LABEL, STATUS_LABEL } from '../i18n/labels';
 
 type TabKey = 'lines' | 'steps' | 'cost' | 'tasting' | 'history';
 
@@ -530,6 +530,7 @@ function TastingTab({ v }: { v: VersionDetail }) {
               <span className="font-semibold">{formatDate(t.tasted_on)}</span>
               <span className="text-muted">{t.session_title}</span>
               {t.blind_label && <Badge>盲測 {t.blind_label}</Badge>}
+              {t.decision && <Badge tone={DECISION_TONE[t.decision]}>{DECISION_LABEL[t.decision]}</Badge>}
             </div>
             <div className="flex flex-wrap gap-3 text-sm">
               <span>
@@ -551,6 +552,18 @@ function TastingTab({ v }: { v: VersionDetail }) {
                 <span className="font-medium">建議：</span>
                 {t.suggestions.join('／')}
               </div>
+            )}
+            {t.conclusion && (
+              <div className="rounded-lg bg-brand-50 px-3 py-2 text-sm">
+                <span className="font-medium">會議結論：</span>
+                {t.conclusion}
+              </div>
+            )}
+            {t.session_summary && (
+              <details className="text-sm">
+                <summary className="min-h-9 cursor-pointer text-brand-700">當天的試菜總結</summary>
+                <p className="mt-1 whitespace-pre-wrap text-muted">{t.session_summary}</p>
+              </details>
             )}
           </Card>
         </Link>

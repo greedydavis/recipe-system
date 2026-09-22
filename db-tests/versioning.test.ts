@@ -518,3 +518,52 @@ describe('產量試做後再填', () => {
     await expectError(t.sql(`update app.recipe_versions set batch_output_qty = 1 where id = $1`, [soup.versionId]), '內容已凍結');
   });
 });
+
+describe('試菜總結與決議', () => {
+  it('可以記錄會議紀錄與每個項目的結論；決議選項會驗證；部分更新不會蓋掉其他欄位', async () => {
+    const soup = await soupInTesting('總結測試湯');
+    const session = await t.rpc<string>(t.users.manager, 'create_tasting_session', {
+      p: {
+        tasted_on: '2026-09-22',
+        title: '第一輪',
+        items: [{ version_id: soup.versionId, blind_label: 'A', maker_name: '阿明', assigned_tester_ids: [t.users.tester] }],
+      },
+    });
+    const detail = await t.rpc<{ items: Array<{ id: string }> }>(t.users.chef, 'get_tasting_session', { p_id: session });
+    const itemId = detail.items[0].id;
+
+    await t.rpc(t.users.manager, 'update_tasting_session', { p_id: session, p: { summary: '雞味足但後段淡，下一輪加干貝' } });
+    await t.rpc(t.users.chef, 'update_tasting_item', { p_id: itemId, p: { conclusion: '大骨增量 10%', decision: 'next_round' } });
+
+    const after = await t.rpc<{
+      summary: string;
+      items: Array<{ conclusion: string; decision: string; blind_label: string; maker_name: string; assigned_testers: unknown[] }>;
+    }>(t.users.chef, 'get_tasting_session', { p_id: session });
+    expect(after.summary).toBe('雞味足但後段淡，下一輪加干貝');
+    expect(after.items[0]).toMatchObject({ conclusion: '大骨增量 10%', decision: 'next_round', blind_label: 'A', maker_name: '阿明' });
+    // 只更新結論，指派與盲測代號都還在
+    expect(after.items[0].assigned_testers).toHaveLength(1);
+
+    await expectError(t.rpc(t.users.chef, 'update_tasting_item', { p_id: itemId, p: { decision: '隨便' } }), '決議選項錯誤');
+    await expectError(t.rpc(t.users.tester, 'update_tasting_session', { p_id: session, p: { summary: 'x' } }), '權限不足');
+    await expectError(t.rpc(t.users.tester, 'update_tasting_item', { p_id: itemId, p: { conclusion: 'x' } }), '權限不足');
+
+    // 版本頁的試菜分頁看得到結論與會議紀錄
+    const v = await t.rpc<{ tastings: Array<{ decision: string; conclusion: string; session_summary: string }> }>(
+      t.users.manager,
+      'get_version',
+      { p_id: soup.versionId },
+    );
+    expect(v.tastings[0]).toMatchObject({
+      decision: 'next_round',
+      conclusion: '大骨增量 10%',
+      session_summary: '雞味足但後段淡，下一輪加干貝',
+    });
+
+    const list = await t.rpc<Array<{ id: string; has_summary: boolean; decided_count: number }>>(
+      t.users.chef,
+      'list_tasting_sessions',
+    );
+    expect(list.find((x) => x.id === session)).toMatchObject({ has_summary: true, decided_count: 1 });
+  });
+});

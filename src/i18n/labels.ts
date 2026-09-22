@@ -70,6 +70,20 @@ export const MENU_READY_LABEL: Record<string, string> = {
   no: '不建議',
 };
 
+export const DECISION_LABEL: Record<string, string> = {
+  next_round: '進入下一輪',
+  adjust: '需要調整',
+  drop: '淘汰',
+  ready: '可以定版',
+};
+
+export const DECISION_TONE: Record<string, 'ok' | 'warn' | 'danger' | 'info'> = {
+  next_round: 'info',
+  adjust: 'warn',
+  drop: 'danger',
+  ready: 'ok',
+};
+
 export const SALTINESS_LABELS = ['太淡', '偏淡', '剛好', '偏鹹', '太鹹'];
 export const OILINESS_LABELS = ['太清', '清爽', '剛好', '偏油', '太油'];
 
