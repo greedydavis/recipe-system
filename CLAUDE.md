@@ -6,7 +6,7 @@
 
 ## 目前階段
 
-**MVP 程式已完成第一版，等 Supabase 設定好就會部署。**（2026-09-17）
+**已上線。**（2026-09-22）Supabase 專案 `shonyrxlpblfmvyrkffe`、GitHub Pages 部署皆完成；接下來是真實使用（真實單價與克重回填、9/22 起的試菜）與 Playwright E2E。
 
 - 已完成：資料庫（migrations、RPC、凍結與稽核 trigger）、計算核心、所有 MVP 頁面、示範模式、基準版菜單匯入腳本
 - repo：**公開**的 https://github.com/greedydavis/recipe-system （使用者選擇公開原始碼）。推送 `main` 會觸發 `.github/workflows/deploy.yml`：先跑測試；repo 變數 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY` 都設定後，才會部署到 https://greedydavis.github.io/recipe-system/
