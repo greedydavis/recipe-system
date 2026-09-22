@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { type TestDb, createTestDb } from './harness';
-import { COMPLETE_SNAPSHOT, createIngredient, createRecipe, expectError, saveDraft, transition } from './fixtures';
+import { createIngredient, createRecipe, expectError, saveDraft, transition } from './fixtures';
 
 let t: TestDb;
 let bone: string;
@@ -37,7 +37,7 @@ async function addFeedback(versionId: string) {
 
 async function lock(versionId: string) {
   await transition(t, t.users.chef, versionId, 'pending_approval', '送審');
-  await transition(t, t.users.founder, versionId, 'locked', '', COMPLETE_SNAPSHOT);
+  await transition(t, t.users.founder, versionId, 'locked');
 }
 
 describe('草案編輯與凍結', () => {
@@ -136,18 +136,23 @@ describe('狀態轉移', () => {
     await expectError(transition(t, t.users.chef, d.versionId, 'pending_approval', '只改錯字'), '「乾香菇」沒有有效單價');
   });
 
-  it('只有創辦人能核准；主廚不行；定版需要完整的成本快照', async () => {
+  it('只有創辦人能核准；成本快照由資料庫重算，不採用瀏覽器傳入的數字', async () => {
     const soup = await soupInTesting('核准測試湯');
     await addFeedback(soup.versionId);
     await transition(t, t.users.chef, soup.versionId, 'pending_approval', '送審');
-    await expectError(transition(t, t.users.chef, soup.versionId, 'locked', '', COMPLETE_SNAPSHOT), '權限不足');
-    await expectError(transition(t, t.users.founder, soup.versionId, 'locked'), '缺少成本快照');
-    await expectError(
-      transition(t, t.users.founder, soup.versionId, 'locked', '', { ...COMPLETE_SNAPSHOT, is_complete: false }),
-      '成本不完整',
-    );
-    await transition(t, t.users.founder, soup.versionId, 'locked', '湯頭清澈', COMPLETE_SNAPSHOT);
-    const v = await t.rpc<{ status: string; approved_by_name: string; snapshots: unknown[]; history: Array<{ to_status: string }> }>(
+    await expectError(transition(t, t.users.chef, soup.versionId, 'locked'), '權限不足');
+    await transition(t, t.users.founder, soup.versionId, 'locked', '湯頭清澈', {
+      is_complete: true,
+      batch_cost: '0.01',
+      cost_per_serving: '0.01',
+      detail: { forged: true },
+    });
+    const v = await t.rpc<{
+      status: string;
+      approved_by_name: string;
+      snapshots: Array<{ batch_cost: number; cost_per_serving: number }>;
+      history: Array<{ to_status: string }>;
+    }>(
       t.users.chef,
       'get_version',
       { p_id: soup.versionId },
@@ -155,6 +160,8 @@ describe('狀態轉移', () => {
     expect(v.status).toBe('locked');
     expect(v.approved_by_name).toBe('創辦人');
     expect(v.snapshots).toHaveLength(1);
+    expect(v.snapshots[0].batch_cost).toBe(108);
+    expect(v.snapshots[0].cost_per_serving).toBeCloseTo(4.32, 10);
     expect(v.history[0].to_status).toBe('locked');
   });
 
@@ -204,11 +211,28 @@ describe('狀態轉移', () => {
     await lock(soup.versionId);
     await expectError(transition(t, t.users.chef, soup.versionId, 'retired', '不用了'), '權限不足');
     await transition(t, t.users.founder, soup.versionId, 'retired', '不用了');
-    await expectError(transition(t, t.users.founder, soup.versionId, 'locked', '', COMPLETE_SNAPSHOT), '不允許的狀態轉移');
+    await expectError(transition(t, t.users.founder, soup.versionId, 'locked'), '不允許的狀態轉移');
   });
 });
 
 describe('元件引用', () => {
+  it('資料庫層拒絕間接循環引用', async () => {
+    const a = await createRecipe(t, { type: 'component', name: '循環元件甲' });
+    const b = await createRecipe(t, { type: 'component', name: '循環元件乙' });
+    // 直接 SQL 模擬繞過前端／RPC；草案狀態下凍結 trigger 不會擋，必須由循環 trigger 擋下。
+    await t.sql(
+      `insert into app.recipe_lines (version_id, line_kind, component_version_id, quantity, unit) values ($1, 'component', $2, 1, 'g')`,
+      [a.versionId, b.versionId],
+    );
+    await expectError(
+      t.sql(
+        `insert into app.recipe_lines (version_id, line_kind, component_version_id, quantity, unit) values ($1, 'component', $2, 1, 'g')`,
+        [b.versionId, a.versionId],
+      ),
+      '形成循環',
+    );
+  });
+
   it('不能引用草案或自己的食譜；菜品定版時引用的元件必須已定版', async () => {
     const draftSoup = await createRecipe(t, { type: 'component', name: '草案湯' });
     const dish = await createRecipe(t, { type: 'dish', name: '引用測試麵' });
@@ -247,7 +271,7 @@ describe('元件引用', () => {
     });
     await transition(t, t.users.chef, dish.versionId, 'pending_approval', '測試');
     await expectError(
-      transition(t, t.users.founder, dish.versionId, 'locked', '', COMPLETE_SNAPSHOT),
+      transition(t, t.users.founder, dish.versionId, 'locked'),
       '定版前必須引用已定版的元件版本',
     );
   });
@@ -365,6 +389,7 @@ describe('試菜評分', () => {
     const itemId = await addFeedback(soup.versionId);
     await lock(soup.versionId);
     await expectError(t.rpc(t.users.tester, 'submit_feedback', { p_item_id: itemId, p: { score_overall: 1 } }), '評分不能再修改');
+    await expectError(t.rpc(t.users.chef, 'submit_feedback', { p_item_id: itemId, p: { score_overall: 5, taster_name: '晚到的試吃者' } }), '評分不能新增');
   });
 
   it('草案不能試做', async () => {
@@ -382,6 +407,10 @@ describe('照片權限（Storage policy 使用的函式）', () => {
     const itemId = await addFeedback(soup.versionId);
     const path = `tastings/${itemId}/a.webp`;
     await t.rpc(t.users.manager, 'add_photo', { p: { tasting_item_id: itemId, storage_path: path } });
+    await expectError(
+      t.rpc(t.users.manager, 'add_photo', { p: { tasting_item_id: itemId, storage_path: 'versions/other/not-allowed.webp' } }),
+      '照片路徑與所屬資料不符',
+    );
 
     await expect(t.rpc(t.users.tester, 'can_view_photo', { p_storage_path: path })).resolves.toBe(true);
     await expect(t.rpc(t.users.tester2, 'can_view_photo', { p_storage_path: path })).resolves.toBe(false);
@@ -516,6 +545,22 @@ describe('產量試做後再填', () => {
     await addFeedback(soup.versionId);
     await lock(soup.versionId);
     await expectError(t.sql(`update app.recipe_versions set batch_output_qty = 1 where id = $1`, [soup.versionId]), '內容已凍結');
+  });
+});
+
+describe('不可竄改歷程', () => {
+  it('狀態歷程與定版成本快照都不能透過資料庫直接刪除', async () => {
+    const soup = await soupInTesting('歷程保護湯');
+    await addFeedback(soup.versionId);
+    await lock(soup.versionId);
+    await expectError(
+      t.sql(`delete from app.version_status_history where version_id = $1`, [soup.versionId]),
+      '狀態歷程只能新增',
+    );
+    await expectError(
+      t.sql(`delete from app.cost_snapshots where version_id = $1`, [soup.versionId]),
+      '成本快照只能新增',
+    );
   });
 });
 

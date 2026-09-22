@@ -1,7 +1,4 @@
-import { computeVersionCost } from '../domain/costing';
-import { priceMetrics } from '../domain/pricing';
-import { buildSnapshot } from '../domain/snapshot';
-import type { CostingBundle, Role } from '../domain/types';
+import type { Role } from '../domain/types';
 
 interface SeedApi {
   createUser(email: string, displayName: string): Promise<string>;
@@ -158,15 +155,11 @@ export async function seedDemoData(api: SeedApi): Promise<void> {
     p: { score_overall: 3, score_texture: 3, saltiness: 1, issues: '麵條稍軟', suggestions: '麵煮 75 秒試試', menu_ready: 'maybe' },
   });
 
-  // 湯底送核准並定版（定版時帶入前端算出的成本快照）
+  // 湯底送核准並定版（成本快照由資料庫依當下資料重算）
   await asChef('transition_version', { p_version_id: soup.version_id, p_to: 'pending_approval', p_comment: '兩位試吃平均 4.5 分' });
-  const bundle = await api.rpcAs<CostingBundle>(founder, 'get_costing_bundle', { p_version_ids: [soup.version_id] });
-  const cost = computeVersionCost(bundle, soup.version_id);
-  const metrics = priceMetrics(cost.servingCost, bundle.versions[soup.version_id], bundle.settings);
   await api.rpcAs(founder, 'transition_version', {
     p_version_id: soup.version_id,
     p_to: 'locked',
     p_comment: '湯頭清爽，定版',
-    p_snapshot: buildSnapshot(cost, metrics, bundle.as_of),
   });
 }

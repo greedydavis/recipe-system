@@ -6,7 +6,7 @@ import type { CostingBundle } from '../src/domain/types';
 import { GLOBAL_UNITS } from '../src/domain/units';
 import { expected } from '../src/domain/__fixtures__/golden/signature-noodle';
 import { type TestDb, createTestDb } from './harness';
-import { createIngredient, createRecipe, saveDraft, transition } from './fixtures';
+import { createIngredient, createRecipe, expectError, saveDraft, transition } from './fixtures';
 
 let t: TestDb;
 
@@ -87,6 +87,42 @@ describe('操作紀錄', () => {
       p: { table_name: 'recipe_versions', record_id: v2 },
     });
     expect(del.items[0]).toMatchObject({ action: 'delete', old_data: { version_no: 2 } });
+  });
+});
+
+describe('基準版匯入', () => {
+  it('任一筆資料無法解析時，整個匯入交易都會回復', async () => {
+    await expectError(
+      t.rpc(t.users.founder, 'import_baseline', {
+        p_file: {
+          source: '測試檔',
+          generated_at: '2026-09-23T00:00:00Z',
+          ingredients: [{ name: '匯入後不該留下的原料', category: 'other', base_dimension: 'mass' }],
+          recipes: [
+            {
+              name: '匯入失敗菜品',
+              type: 'dish',
+              version: {
+                batch_output_qty: 1,
+                batch_output_unit: 'g',
+                serving_qty: 1,
+                serving_unit: 'g',
+                lines: [{ component: '不存在的元件', quantity: 1, unit: 'g' }],
+                steps: [],
+              },
+            },
+          ],
+        },
+      }),
+      '不存在或尚未建立',
+    );
+    const [{ ingredients, recipes }] = await t.sql<{ ingredients: number; recipes: number }>(
+      `select
+        (select count(*)::int from app.ingredients where name = '匯入後不該留下的原料') as ingredients,
+        (select count(*)::int from app.recipes where name = '匯入失敗菜品') as recipes`,
+    );
+    expect(ingredients).toBe(0);
+    expect(recipes).toBe(0);
   });
 });
 

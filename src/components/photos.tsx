@@ -73,7 +73,13 @@ export function PhotoStrip({
       });
       const path = `${targetPrefix(target)}/${crypto.randomUUID()}.webp`;
       await backend.uploadPhoto(path, compressed);
-      await rpc('add_photo', { p: { ...target, storage_path: path } });
+      try {
+        await rpc('add_photo', { p: { ...target, storage_path: path } });
+      } catch (error) {
+        // Storage 先上傳才能符合私有 bucket policy；建立紀錄失敗時盡力補償清理檔案。
+        await backend.removePhotoFile(path).catch(() => undefined);
+        throw error;
+      }
     }
   });
 

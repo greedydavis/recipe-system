@@ -52,7 +52,8 @@ export function createSupabaseBackend(url: string, anonKey: string): Backend {
     },
 
     async removePhotoFile(path) {
-      await client.storage.from(BUCKET).remove([path]);
+      const { error } = await client.storage.from(BUCKET).remove([path]);
+      if (error) throw new RpcError(`照片檔案刪除失敗：${error.message}`);
     },
   };
 }

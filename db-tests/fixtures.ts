@@ -102,5 +102,3 @@ export function transition(t: TestDb, user: string, versionId: string, to: strin
     p_snapshot: snapshot,
   });
 }
-
-export const COMPLETE_SNAPSHOT = { is_complete: true, batch_cost: '10', cost_per_serving: '1', detail: {} };

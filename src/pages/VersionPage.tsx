@@ -41,7 +41,6 @@ import {
   formatServingCost,
   formatUnitCost,
 } from '../domain/format';
-import { buildSnapshot } from '../domain/snapshot';
 import { type Transition, availableTransitions } from '../domain/status';
 import { dec } from '../domain/decimal';
 import { DECISION_LABEL, DECISION_TONE, HEAT_LABEL, STATUS_LABEL } from '../i18n/labels';
@@ -235,7 +234,7 @@ function VersionView() {
         </BottomBar>
       )}
 
-      {transition && <TransitionSheet v={v} transition={transition} view={view} asOf={costs.bundle?.as_of} onClose={() => setTransition(null)} />}
+      {transition && <TransitionSheet v={v} transition={transition} view={view} onClose={() => setTransition(null)} />}
       {recordingYield && <YieldSheet v={v} onClose={() => setRecordingYield(false)} />}
     </div>
   );
@@ -702,18 +701,15 @@ function TransitionSheet({
   v,
   transition,
   view,
-  asOf,
   onClose,
 }: {
   v: VersionDetail;
   transition: Transition;
   view?: CostView;
-  asOf?: string;
   onClose: () => void;
 }) {
   const toast = useToast();
   const [comment, setComment] = useState('');
-  const needsSnapshot = transition.to === 'locked';
   const hints = useMemo(() => {
     const list: string[] = [];
     if (transition.to === 'testing' || transition.to === 'pending_approval' || transition.to === 'locked') {
@@ -734,8 +730,7 @@ function TransitionSheet({
   }, [transition, v, view]);
 
   const run = useAction(() => {
-    const snapshot = needsSnapshot && view && asOf ? buildSnapshot(view.cost, view.metrics, asOf) : null;
-    return rpc('transition_version', { p_version_id: v.id, p_to: transition.to, p_comment: comment, p_snapshot: snapshot });
+    return rpc('transition_version', { p_version_id: v.id, p_to: transition.to, p_comment: comment });
   });
 
   return (
