@@ -91,7 +91,8 @@ describe('草案編輯與凍結', () => {
       '內容已凍結',
     );
     await expectError(t.sql(`update app.recipe_steps set instruction = 'x' where version_id = $1`, [soup.versionId]), '內容已凍結');
-    await expectError(t.sql(`update app.recipe_versions set serving_qty = 1 where id = $1`, [soup.versionId]), '內容已凍結');
+    await expectError(t.sql(`update app.recipe_versions set title = 'x' where id = $1`, [soup.versionId]), '內容已凍結');
+    await expectError(t.sql(`update app.recipe_versions set notes = 'x' where id = $1`, [soup.versionId]), '內容已凍結');
     await expectError(
       t.sql(`insert into app.photos (storage_path, version_id) values ('x.webp', $1)`, [soup.versionId]),
       '內容已凍結',
@@ -456,5 +457,64 @@ describe('試菜場次的項目增刪', () => {
     await t.rpc(t.users.chef, 'delete_tasting_item', { p_id: itemA.id });
     const final = await t.rpc<{ items: unknown[] }>(t.users.chef, 'get_tasting_session', { p_id: session });
     expect(final.items).toHaveLength(1);
+  });
+});
+
+describe('產量試做後再填', () => {
+  async function soupWithoutYield(name: string) {
+    const r = await createRecipe(t, { type: 'component', name });
+    await t.rpc(t.users.chef, 'save_version_draft', {
+      p_version_id: r.versionId,
+      p_revision: 1,
+      p: {
+        batch_output_unit: 'ml',
+        serving_unit: 'ml',
+        lines: [{ id: crypto.randomUUID(), line_kind: 'ingredient', ingredient_id: bone, quantity: 1800, unit: 'g' }],
+      },
+    });
+    return r;
+  }
+
+  it('沒填產量也可以送試菜，但送核准會被擋下', async () => {
+    const soup = await soupWithoutYield('未填產量湯');
+    await expect(transition(t, t.users.chef, soup.versionId, 'testing')).resolves.toMatchObject({ status: 'testing' });
+    await addFeedback(soup.versionId);
+    await expectError(transition(t, t.users.chef, soup.versionId, 'pending_approval', '送審'), '請填寫批次產量');
+  });
+
+  it('試菜中可以記錄實際產量，記錄後才能送核准', async () => {
+    const soup = await soupWithoutYield('記錄產量湯');
+    await transition(t, t.users.chef, soup.versionId, 'testing');
+    await addFeedback(soup.versionId);
+
+    await expectError(t.rpc(t.users.manager, 'record_yield', { p_version_id: soup.versionId, p: {} }), '權限不足');
+    await expectError(t.rpc(t.users.tester, 'record_yield', { p_version_id: soup.versionId, p: {} }), '權限不足');
+
+    await t.rpc(t.users.chef, 'record_yield', {
+      p_version_id: soup.versionId,
+      p: { batch_output_qty: 9800, batch_output_unit: 'ml', serving_qty: 380, serving_unit: 'ml' },
+    });
+    const v = await t.rpc<{ batch_output_qty: number; serving_qty: number }>(t.users.chef, 'get_version', { p_id: soup.versionId });
+    expect(v).toMatchObject({ batch_output_qty: 9800, serving_qty: 380 });
+
+    const logs = await t.rpc<{ items: Array<{ context: string; changed_fields: string[] }> }>(t.users.founder, 'list_audit_logs', {
+      p: { table_name: 'recipe_versions', record_id: soup.versionId },
+    });
+    expect(logs.items[0]).toMatchObject({ context: 'record_yield' });
+    expect(logs.items[0].changed_fields).toContain('batch_output_qty');
+
+    await expect(transition(t, t.users.chef, soup.versionId, 'pending_approval', '送審')).resolves.toMatchObject({
+      status: 'pending_approval',
+    });
+    // 待核准之後連產量都鎖住
+    await expectError(t.rpc(t.users.chef, 'record_yield', { p_version_id: soup.versionId, p: { batch_output_qty: 1 } }), '只有「試菜中」');
+    await expectError(t.sql(`update app.recipe_versions set batch_output_qty = 1 where id = $1`, [soup.versionId]), '內容已凍結');
+  });
+
+  it('定版後產量也不能再改', async () => {
+    const soup = await soupInTesting('定版產量湯');
+    await addFeedback(soup.versionId);
+    await lock(soup.versionId);
+    await expectError(t.sql(`update app.recipe_versions set batch_output_qty = 1 where id = $1`, [soup.versionId]), '內容已凍結');
   });
 });

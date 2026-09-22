@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { can, useRole } from '../app/auth';
 import { RequireRole } from '../app/Layout';
 import { type CostView, useCosts } from '../app/costing';
-import { formatDate, formatDateTime, formatScore, formatSigned } from '../app/format';
+import { formatDate, formatDateTime, formatScore, formatSigned, numStr, toNum } from '../app/format';
 import { PhotoStrip } from '../components/photos';
 import {
   Badge,
@@ -17,8 +17,10 @@ import {
   LinkButton,
   Loading,
   Notice,
+  NumberInput,
   PageHeader,
   Section,
+  Select,
   Sheet,
   StatusBadge,
   Tabs,
@@ -64,6 +66,7 @@ function VersionView() {
   const version = useRpc<VersionDetail>('get_version', { p_id: id });
   const costs = useCosts([id]);
   const [transition, setTransition] = useState<Transition | null>(null);
+  const [recordingYield, setRecordingYield] = useState(false);
 
   const copy = useAction(() => rpc<string>('copy_version', { p_source_id: id, p_change_note: '' }));
   const remove = useAction(() => rpc('delete_draft', { p_version_id: id }));
@@ -102,7 +105,18 @@ function VersionView() {
           </Notice>
         )}
         {(v.status === 'testing' || v.status === 'pending_approval') && (
-          <Notice tone="info">內容已凍結（{STATUS_LABEL[v.status]}）。要修改請「複製為新版本」。</Notice>
+          <Notice tone="info">
+            內容已凍結（{STATUS_LABEL[v.status]}）。要修改請「複製為新版本」。
+            {v.status === 'testing' && '試做後量到的產量還是可以記錄。'}
+          </Notice>
+        )}
+        {v.status === 'testing' && can.editRecipes(role) && (v.batch_output_qty === null || v.serving_qty === null) && (
+          <Notice tone="warn" title="還沒記錄實際產量">
+            <p>試做完秤出成品量再填，系統才算得出出成率與每份成本；送核准前必須填。</p>
+            <Button small className="mt-2" onClick={() => setRecordingYield(true)}>
+              記錄實際產量
+            </Button>
+          </Notice>
         )}
         {v.status === 'retired' && (
           <Notice tone="neutral" title="此版本已停用">
@@ -153,6 +167,11 @@ function VersionView() {
             <GitCompare className="size-4" aria-hidden />
             版本比較
           </LinkButton>
+          {v.status === 'testing' && can.editRecipes(role) && (
+            <Button small variant="secondary" onClick={() => setRecordingYield(true)}>
+              記錄實際產量
+            </Button>
+          )}
           {can.editRecipes(role) && (
             <Button
               small
@@ -217,6 +236,7 @@ function VersionView() {
       )}
 
       {transition && <TransitionSheet v={v} transition={transition} view={view} asOf={costs.bundle?.as_of} onClose={() => setTransition(null)} />}
+      {recordingYield && <YieldSheet v={v} onClose={() => setRecordingYield(false)} />}
     </div>
   );
 }
@@ -571,6 +591,97 @@ function HistoryTab({ v, canAudit }: { v: VersionDetail; canAudit: boolean }) {
         </LinkButton>
       )}
     </div>
+  );
+}
+
+/** 試菜中記錄實際做出來的產量；食譜內容仍然是凍結的 */
+function YieldSheet({ v, onClose }: { v: VersionDetail; onClose: () => void }) {
+  const toast = useToast();
+  const isDish = v.recipe.type === 'dish';
+  const [batchQty, setBatchQty] = useState(numStr(v.batch_output_qty));
+  const [batchUnit, setBatchUnit] = useState<'g' | 'ml'>(v.batch_output_unit ?? 'g');
+  const [servingQty, setServingQty] = useState(numStr(v.serving_qty));
+  const [servingUnit, setServingUnit] = useState<'g' | 'ml'>(v.serving_unit ?? 'g');
+  const [density, setDensity] = useState(numStr(v.output_density_g_per_ml));
+
+  const save = useAction(() =>
+    rpc('record_yield', {
+      p_version_id: v.id,
+      p: {
+        batch_output_qty: toNum(batchQty) ?? '',
+        batch_output_unit: batchUnit,
+        serving_qty: toNum(servingQty) ?? '',
+        serving_unit: servingUnit,
+        output_density_g_per_ml: toNum(density) ?? '',
+      },
+    }),
+  );
+
+  const qtyField = (
+    label: string,
+    hint: string,
+    value: string,
+    setValue: (v: string) => void,
+    unit: 'g' | 'ml',
+    setUnit: (u: 'g' | 'ml') => void,
+  ) => (
+    <Field label={label} hint={hint}>
+      {(id) => (
+        <div className="flex gap-2">
+          <NumberInput id={id} value={value} onChange={setValue} className="flex-1" />
+          <Select aria-label={`${label}單位`} value={unit} onChange={(e) => setUnit(e.target.value as 'g' | 'ml')} className="w-24">
+            <option value="g">g</option>
+            <option value="ml">ml</option>
+          </Select>
+        </div>
+      )}
+    </Field>
+  );
+
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={`記錄實際產量：${v.recipe.name} v${v.version_no}`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            取消
+          </Button>
+          <Button
+            block
+            loading={save.isPending}
+            onClick={() =>
+              save.mutate(undefined, {
+                onSuccess: () => {
+                  toast('已記錄實際產量');
+                  onClose();
+                },
+                onError: (e) => toast(e.message, 'danger'),
+              })
+            }
+          >
+            儲存
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-muted">
+        產量是試做後量出來的結果，所以「試菜中」還可以記錄。用料、步驟等食譜內容仍然凍結，要改請複製為新版本。
+      </p>
+      {!isDish && qtyField('批次產量', '實際過濾或完成後秤到的量', batchQty, setBatchQty, batchUnit, setBatchUnit)}
+      {qtyField(
+        isDish ? '每份克重' : '每份量',
+        isDish ? '出餐時整份秤重' : '一碗或一份實際舀多少',
+        servingQty,
+        setServingQty,
+        servingUnit,
+        setServingUnit,
+      )}
+      <Field label="成品密度 g/ml（選填）" hint="產量用 ml 記錄、但要算出成率時需要；湯底約 1.0">
+        {(id) => <NumberInput id={id} value={density} onChange={setDensity} />}
+      </Field>
+    </Sheet>
   );
 }
 

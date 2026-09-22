@@ -267,9 +267,11 @@ function Editor() {
 
       <Section title="產量">
         <Card className="space-y-3">
+          <p className="text-sm text-muted">產量是試做完秤出來的結果，可以先留空，試菜當天量到多少再回來填；送核准前才需要填齊。</p>
           {isDish ? (
             <QtyUnit
               label="每份克重（成品一份的重量或容量）"
+              hint="出餐時整份秤重；試做後再填也可以"
               qty={form.serving_qty}
               unit={form.serving_unit}
               onChange={(qty, unit) => update({ serving_qty: qty, serving_unit: unit })}
@@ -278,12 +280,14 @@ function Editor() {
             <>
               <QtyUnit
                 label="批次產量（實際過濾或完成後的量）"
+                hint="試做後量出來的實際成品量；試做前可以先留空"
                 qty={form.batch_output_qty}
                 unit={form.batch_output_unit}
                 onChange={(qty, unit) => update({ batch_output_qty: qty, batch_output_unit: unit })}
               />
               <QtyUnit
                 label="每份量（一碗或一份使用多少）"
+                hint="一碗要舀多少；試做時確認後再填也可以"
                 qty={form.serving_qty}
                 unit={form.serving_unit}
                 onChange={(qty, unit) => update({ serving_qty: qty, serving_unit: unit })}
@@ -514,17 +518,19 @@ function unitOptions(ing: CostingIngredient | undefined, current: string): strin
 
 function QtyUnit({
   label,
+  hint,
   qty,
   unit,
   onChange,
 }: {
   label: string;
+  hint?: string;
   qty: string;
   unit: OutputUnit;
   onChange: (qty: string, unit: OutputUnit) => void;
 }) {
   return (
-    <Field label={label}>
+    <Field label={label} hint={hint}>
       {(fid) => (
         <div className="flex gap-2">
           <NumberInput id={fid} value={qty} onChange={(val) => onChange(val, unit)} className="flex-1" />
