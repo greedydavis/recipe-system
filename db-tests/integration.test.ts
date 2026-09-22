@@ -126,43 +126,49 @@ describe('基準版匯入', () => {
   });
 });
 
+/** 建立黃金範例的一整組資料（原物料 → 湯底元件 → 菜品）。名稱加前綴，同一個資料庫可以建立多組。 */
+async function buildGolden(prefix: string) {
+  const bone = await createIngredient(t, { name: `${prefix}豬大骨`, packQty: 20, packUnit: 'kg', price: 1200 });
+  const onion = await createIngredient(t, { name: `${prefix}洋蔥`, waste: 0.1, packQty: 20, packUnit: 'kg', price: 500 });
+  const water = await createIngredient(t, { name: `${prefix}水`, base: 'volume', density: 1, packQty: 1000, packUnit: 'L', price: 12 });
+  const noodle = await createIngredient(t, { name: `${prefix}生麵條`, packQty: 3, packUnit: 'kg', price: 180 });
+  const scallion = await createIngredient(t, { name: `${prefix}青蔥`, waste: 0.2, packQty: 3, packUnit: 'kg', price: 270 });
+  const egg = await createIngredient(t, { name: `${prefix}雞蛋` });
+  await t.rpc(t.users.chef, 'upsert_ingredient_unit', { p: { ingredient_id: egg.id, unit_name: '顆', qty_in_base: 60 } });
+  const eggSpec = await t.rpc<string>(t.users.chef, 'upsert_packaging_spec', {
+    p: { ingredient_id: egg.id, spec_name: '1 台斤', pack_qty: 1, pack_unit: '台斤' },
+  });
+  await t.rpc(t.users.chef, 'add_purchase_price', { p_spec_id: eggSpec, p_price: 40, p_effective_date: '2026-01-01', p_note: '' });
+
+  const soup = await createRecipe(t, { type: 'component', name: `${prefix}湯底` });
+  await saveDraft(t, soup.versionId, {
+    batch: [21000, 'g'],
+    serving: [420, 'g'],
+    lines: [
+      { line_kind: 'ingredient', ingredient_id: bone.id, quantity: 10000, unit: 'g' },
+      { line_kind: 'ingredient', ingredient_id: onion.id, quantity: 2000, unit: 'g' },
+      { line_kind: 'ingredient', ingredient_id: water.id, quantity: 30, unit: 'L' },
+    ],
+  });
+  await transition(t, t.users.chef, soup.versionId, 'testing');
+
+  const dish = await createRecipe(t, { type: 'dish', name: `${prefix}湯麵` });
+  await saveDraft(t, dish.versionId, {
+    serving: [640, 'g'],
+    lines: [
+      { line_kind: 'component', component_version_id: soup.versionId, quantity: 420, unit: 'g' },
+      { line_kind: 'ingredient', ingredient_id: noodle.id, quantity: 150, unit: 'g' },
+      { line_kind: 'ingredient', ingredient_id: scallion.id, quantity: 10, unit: 'g' },
+      { line_kind: 'ingredient', ingredient_id: egg.id, quantity: 1, unit: '顆' },
+    ],
+  });
+  await t.rpc(t.users.founder, 'set_menu_price', { p_recipe_id: dish.recipeId, p_price: 90, p_effective_date: '2026-01-01', p_note: '' });
+  return { soup, dish };
+}
+
 describe('RPC 成本資料 + 前端計算 = 黃金範例', () => {
   it('透過資料庫建立黃金範例，計算結果和手算一致', async () => {
-    const bone = await createIngredient(t, { name: '黃金豬大骨', packQty: 20, packUnit: 'kg', price: 1200 });
-    const onion = await createIngredient(t, { name: '黃金洋蔥', waste: 0.1, packQty: 20, packUnit: 'kg', price: 500 });
-    const water = await createIngredient(t, { name: '黃金水', base: 'volume', density: 1, packQty: 1000, packUnit: 'L', price: 12 });
-    const noodle = await createIngredient(t, { name: '黃金生麵條', packQty: 3, packUnit: 'kg', price: 180 });
-    const scallion = await createIngredient(t, { name: '黃金青蔥', waste: 0.2, packQty: 3, packUnit: 'kg', price: 270 });
-    const egg = await createIngredient(t, { name: '黃金雞蛋' });
-    await t.rpc(t.users.chef, 'upsert_ingredient_unit', { p: { ingredient_id: egg.id, unit_name: '顆', qty_in_base: 60 } });
-    const eggSpec = await t.rpc<string>(t.users.chef, 'upsert_packaging_spec', {
-      p: { ingredient_id: egg.id, spec_name: '1 台斤', pack_qty: 1, pack_unit: '台斤' },
-    });
-    await t.rpc(t.users.chef, 'add_purchase_price', { p_spec_id: eggSpec, p_price: 40, p_effective_date: '2026-01-01', p_note: '' });
-
-    const soup = await createRecipe(t, { type: 'component', name: '黃金湯底' });
-    await saveDraft(t, soup.versionId, {
-      batch: [21000, 'g'],
-      serving: [420, 'g'],
-      lines: [
-        { line_kind: 'ingredient', ingredient_id: bone.id, quantity: 10000, unit: 'g' },
-        { line_kind: 'ingredient', ingredient_id: onion.id, quantity: 2000, unit: 'g' },
-        { line_kind: 'ingredient', ingredient_id: water.id, quantity: 30, unit: 'L' },
-      ],
-    });
-    await transition(t, t.users.chef, soup.versionId, 'testing');
-
-    const dish = await createRecipe(t, { type: 'dish', name: '黃金湯麵' });
-    await saveDraft(t, dish.versionId, {
-      serving: [640, 'g'],
-      lines: [
-        { line_kind: 'component', component_version_id: soup.versionId, quantity: 420, unit: 'g' },
-        { line_kind: 'ingredient', ingredient_id: noodle.id, quantity: 150, unit: 'g' },
-        { line_kind: 'ingredient', ingredient_id: scallion.id, quantity: 10, unit: 'g' },
-        { line_kind: 'ingredient', ingredient_id: egg.id, quantity: 1, unit: '顆' },
-      ],
-    });
-    await t.rpc(t.users.founder, 'set_menu_price', { p_recipe_id: dish.recipeId, p_price: 90, p_effective_date: '2026-01-01', p_note: '' });
+    const { soup, dish } = await buildGolden('黃金');
 
     const bundle = await t.rpc<CostingBundle>(t.users.manager, 'get_costing_bundle', { p_version_ids: [dish.versionId] });
     expect(Object.keys(bundle.versions)).toHaveLength(2);
@@ -176,5 +182,34 @@ describe('RPC 成本資料 + 前端計算 = 黃金範例', () => {
     const m = priceMetrics(dishCost.servingCost, bundle.versions[dish.versionId], bundle.settings);
     expect(m.foodCostRate?.toFixed(10)).toBe(expected.dish.foodCostRate);
     expect(m.suggestedPrice?.toString()).toBe(expected.dish.suggestedPrice);
+  });
+
+  // CLAUDE.md §3：定版快照改由資料庫重算後，兩套實作都要對到同一組手算答案，才不會各算各的。
+  it('資料庫重算的定版快照，和前端算的黃金範例一致', async () => {
+    const { soup, dish } = await buildGolden('伺服器黃金');
+
+    const snap = async (versionId: string, key: string) => {
+      const [row] = await t.sql<{ value: string | null }>(
+        `select round((app.server_cost_snapshot($1) ->> $2)::numeric, 10)::text as value`,
+        [versionId, key],
+      );
+      return row.value;
+    };
+
+    expect(await snap(soup.versionId, 'batch_cost')).toBe(expected.soup.batchCost);
+    expect(await snap(soup.versionId, 'yield_rate')).toBe(expected.soup.yieldRate);
+    expect(await snap(soup.versionId, 'cost_per_serving')).toBe(expected.soup.servingCost);
+
+    // 菜品引用元件時，資料庫取的是元件「已定版」的成本快照，所以要先把湯底定版。
+    const session = await t.rpc<string>(t.users.chef, 'create_tasting_session', {
+      p: { tasted_on: '2026-09-22', title: '黃金範例試菜', items: [{ version_id: soup.versionId, assigned_tester_ids: [t.users.tester] }] },
+    });
+    const detail = await t.rpc<{ items: Array<{ id: string }> }>(t.users.chef, 'get_tasting_session', { p_id: session });
+    await t.rpc(t.users.tester, 'submit_feedback', { p_item_id: detail.items[0].id, p: { score_overall: 4 } });
+    await transition(t, t.users.chef, soup.versionId, 'pending_approval', '送審');
+    await transition(t, t.users.founder, soup.versionId, 'locked');
+
+    expect(await snap(dish.versionId, 'cost_per_serving')).toBe(expected.dish.servingCost);
+    expect(await snap(dish.versionId, 'food_cost_rate')).toBe(expected.dish.foodCostRate);
   });
 });
