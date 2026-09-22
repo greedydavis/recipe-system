@@ -115,14 +115,93 @@ export function TastingsPage() {
 
 // ───────────────────────── 建立場次 ─────────────────────────
 
-interface NewItem {
-  key: string;
-  version_id: string;
-  label: string;
+/** 試做項目的盲測代號、試做人與評分人員；建立場次與事後加入／修改都用這一組欄位 */
+interface ItemAssignment {
   blind_label: string;
   maker_id: string;
   maker_name: string;
   assigned_tester_ids: string[];
+}
+
+interface NewItem extends ItemAssignment {
+  key: string;
+  version_id: string;
+  label: string;
+}
+
+function assignmentPayload(a: ItemAssignment) {
+  return {
+    blind_label: a.blind_label,
+    maker_id: a.maker_id || null,
+    maker_name: a.maker_id ? '' : a.maker_name,
+    assigned_tester_ids: a.assigned_tester_ids,
+  };
+}
+
+function ItemAssignmentFields({
+  value,
+  onChange,
+  team,
+  blindPlaceholder,
+}: {
+  value: ItemAssignment;
+  onChange: (value: ItemAssignment) => void;
+  team: TeamMember[];
+  blindPlaceholder?: string;
+}) {
+  const testers = team.filter((m) => m.role === 'tester');
+  const others = team.filter((m) => m.role !== 'tester');
+  const set = (patch: Partial<ItemAssignment>) => onChange({ ...value, ...patch });
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="盲測代號（選填）" hint="填了之後測試人員只看得到代號">
+          {(id) => (
+            <Input id={id} value={value.blind_label} onChange={(e) => set({ blind_label: e.target.value })} placeholder={blindPlaceholder} />
+          )}
+        </Field>
+        <Field label="試做人">
+          {(id) => (
+            <Select id={id} value={value.maker_id} onChange={(e) => set({ maker_id: e.target.value })}>
+              <option value="">其他（手動輸入）</option>
+              {others.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.display_name}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      </div>
+      {!value.maker_id && (
+        <Input
+          aria-label="試做人姓名"
+          placeholder="試做人姓名"
+          value={value.maker_name}
+          onChange={(e) => set({ maker_name: e.target.value })}
+        />
+      )}
+      <fieldset>
+        <legend className="text-sm font-medium">指派評分人員</legend>
+        <div className="grid sm:grid-cols-2">
+          {[...testers, ...others].map((m) => (
+            <Checkbox
+              key={m.id}
+              label={`${m.display_name}（${ROLE_LABEL[m.role]}）`}
+              checked={value.assigned_tester_ids.includes(m.id)}
+              onChange={(checked) =>
+                set({
+                  assigned_tester_ids: checked
+                    ? [...value.assigned_tester_ids, m.id]
+                    : value.assigned_tester_ids.filter((t) => t !== m.id),
+                })
+              }
+            />
+          ))}
+        </div>
+      </fieldset>
+    </>
+  );
 }
 
 export function TastingNewPage() {
@@ -152,19 +231,12 @@ function TastingNew() {
         title,
         location,
         note,
-        items: items.map((i) => ({
-          version_id: i.version_id,
-          blind_label: i.blind_label,
-          maker_id: i.maker_id || null,
-          maker_name: i.maker_id ? '' : i.maker_name,
-          assigned_tester_ids: i.assigned_tester_ids,
-        })),
+        items: items.map((i) => ({ version_id: i.version_id, ...assignmentPayload(i) })),
       },
     }),
   );
 
   const testers = (team.data ?? []).filter((m) => m.role === 'tester');
-  const others = (team.data ?? []).filter((m) => m.role !== 'tester');
 
   return (
     <div className="space-y-6">
@@ -204,68 +276,12 @@ function TastingNew() {
                   <Trash2 className="size-4" />
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="盲測代號（選填）" hint="填了之後測試人員只看得到代號">
-                  {(id) => (
-                    <Input
-                      id={id}
-                      value={item.blind_label}
-                      onChange={(e) => setItems(items.map((x, i) => (i === index ? { ...x, blind_label: e.target.value } : x)))}
-                      placeholder={String.fromCharCode(65 + index)}
-                    />
-                  )}
-                </Field>
-                <Field label="試做人">
-                  {(id) => (
-                    <Select
-                      id={id}
-                      value={item.maker_id}
-                      onChange={(e) => setItems(items.map((x, i) => (i === index ? { ...x, maker_id: e.target.value } : x)))}
-                    >
-                      <option value="">其他（手動輸入）</option>
-                      {others.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.display_name}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
-              </div>
-              {!item.maker_id && (
-                <Input
-                  aria-label="試做人姓名"
-                  placeholder="試做人姓名"
-                  value={item.maker_name}
-                  onChange={(e) => setItems(items.map((x, i) => (i === index ? { ...x, maker_name: e.target.value } : x)))}
-                />
-              )}
-              <fieldset>
-                <legend className="text-sm font-medium">指派評分人員</legend>
-                <div className="grid sm:grid-cols-2">
-                  {[...testers, ...others].map((m) => (
-                    <Checkbox
-                      key={m.id}
-                      label={`${m.display_name}（${ROLE_LABEL[m.role]}）`}
-                      checked={item.assigned_tester_ids.includes(m.id)}
-                      onChange={(checked) =>
-                        setItems(
-                          items.map((x, i) =>
-                            i === index
-                              ? {
-                                  ...x,
-                                  assigned_tester_ids: checked
-                                    ? [...x.assigned_tester_ids, m.id]
-                                    : x.assigned_tester_ids.filter((t) => t !== m.id),
-                                }
-                              : x,
-                          ),
-                        )
-                      }
-                    />
-                  ))}
-                </div>
-              </fieldset>
+              <ItemAssignmentFields
+                value={item}
+                onChange={(v) => setItems(items.map((x, i) => (i === index ? { ...x, ...v } : x)))}
+                team={team.data ?? []}
+                blindPlaceholder={String.fromCharCode(65 + index)}
+              />
             </Card>
           ))}
         </div>
@@ -386,22 +402,103 @@ export function TastingSessionPage() {
 
 function TastingSession() {
   const { id = '' } = useParams();
+  const me = useMe();
+  const toast = useToast();
   const session = useRpc<TastingSessionDetail>('get_tasting_session', { p_id: id });
+  const team = useRpc<TeamMember[]>('list_team_members');
+  const [picking, setPicking] = useState(false);
+  const [pending, setPending] = useState<{ versionId: string; label: string; assignment: ItemAssignment } | null>(null);
+
+  const add = useAction((p: { versionId: string; assignment: ItemAssignment }) =>
+    rpc('add_tasting_item', { p_session_id: id, p: { version_id: p.versionId, ...assignmentPayload(p.assignment) } }),
+  );
+
   if (session.isLoading) return <Loading />;
   if (session.error || !session.data) return <ErrorState error={session.error} />;
   const s = session.data;
+
   return (
     <div className="space-y-6">
       <PageHeader
         back="/tastings"
         title={`${formatDate(s.tasted_on)} ${s.title}`}
         subtitle={[s.location, s.created_by_name && `建立者 ${s.created_by_name}`].filter(Boolean).join('・')}
+        actions={
+          <Button small onClick={() => setPicking(true)}>
+            <Plus className="size-4" aria-hidden />
+            加入項目
+          </Button>
+        }
       />
       {s.note && <Card className="text-sm whitespace-pre-wrap">{s.note}</Card>}
       {s.items.length > 1 && <ComparisonTable items={s.items} />}
+      {s.items.length === 0 && <EmptyState title="這個場次還沒有試做項目">按右上角「加入項目」選要試做的版本。</EmptyState>}
       {s.items.map((item) => (
-        <TastingItemCard key={item.id} item={item} />
+        <TastingItemCard key={item.id} item={item} team={team.data ?? []} />
       ))}
+
+      {picking && (
+        <VersionPicker
+          exclude={s.items.map((i) => i.version_id)}
+          onClose={() => setPicking(false)}
+          onPick={(recipe, version) => {
+            setPicking(false);
+            const usesBlindLabels = s.items.some((i) => i.blind_label);
+            setPending({
+              versionId: version.id,
+              label: `${recipe.name} v${version.version_no}`,
+              assignment: {
+                blind_label: usesBlindLabels ? String.fromCharCode(65 + s.items.length) : '',
+                maker_id: me.role === 'tester' ? '' : me.id,
+                maker_name: '',
+                assigned_tester_ids:
+                  s.items[0]?.assigned_testers.map((t) => t.id) ??
+                  (team.data ?? []).filter((m) => m.role === 'tester').map((m) => m.id),
+              },
+            });
+          }}
+        />
+      )}
+
+      {pending && (
+        <Sheet
+          open
+          title={`加入試做項目：${pending.label}`}
+          onClose={() => setPending(null)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setPending(null)}>
+                取消
+              </Button>
+              <Button
+                block
+                loading={add.isPending}
+                onClick={() =>
+                  add.mutate(
+                    { versionId: pending.versionId, assignment: pending.assignment },
+                    {
+                      onSuccess: () => {
+                        toast('已加入試做項目');
+                        setPending(null);
+                      },
+                      onError: (e) => toast(e.message, 'danger'),
+                    },
+                  )
+                }
+              >
+                加入
+              </Button>
+            </>
+          }
+        >
+          <ItemAssignmentFields
+            value={pending.assignment}
+            onChange={(v) => setPending({ ...pending, assignment: v })}
+            team={team.data ?? []}
+            blindPlaceholder={String.fromCharCode(65 + s.items.length)}
+          />
+        </Sheet>
+      )}
     </div>
   );
 }
@@ -442,7 +539,7 @@ function ComparisonTable({ items }: { items: TastingItemDetail[] }) {
   );
 }
 
-function TastingItemCard({ item }: { item: TastingItemDetail }) {
+function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMember[] }) {
   const role = useRole();
   const me = useMe();
   const toast = useToast();
@@ -450,19 +547,25 @@ function TastingItemCard({ item }: { item: TastingItemDetail }) {
   const [editing, setEditing] = useState(false);
   const [deviation, setDeviation] = useState(item.deviation_note);
   const [proxy, setProxy] = useState(false);
+  const [assignment, setAssignment] = useState<ItemAssignment | null>(null);
+
+  const currentAssignment = (): ItemAssignment => ({
+    blind_label: item.blind_label,
+    maker_id: item.maker_id ?? '',
+    maker_name: item.maker_name_text,
+    assigned_tester_ids: item.assigned_testers.map((t) => t.id),
+  });
 
   const saveDeviation = useAction(() =>
     rpc('update_tasting_item', {
       p_id: item.id,
-      p: {
-        deviation_note: deviation,
-        blind_label: item.blind_label,
-        maker_id: item.maker_id,
-        maker_name: item.maker_name_text,
-        assigned_tester_ids: item.assigned_testers.map((t) => t.id),
-      },
+      p: { deviation_note: deviation, ...assignmentPayload(currentAssignment()) },
     }),
   );
+  const saveAssignment = useAction((value: ItemAssignment) =>
+    rpc('update_tasting_item', { p_id: item.id, p: { deviation_note: item.deviation_note, ...assignmentPayload(value) } }),
+  );
+  const removeItem = useAction(() => rpc('delete_tasting_item', { p_id: item.id }));
   const newVersion = useAction(() => {
     const issues = item.feedback.map((f) => f.issues).filter(Boolean);
     const suggestions = item.feedback.map((f) => f.suggestions).filter(Boolean);
@@ -488,8 +591,27 @@ function TastingItemCard({ item }: { item: TastingItemDetail }) {
         {item.blind_label && <Badge>盲測 {item.blind_label}</Badge>}
         <StatusBadge status={item.version_status} />
       </div>
-      <div className="text-sm text-muted">
-        試做人：{item.maker_name || '—'}・評分人員：{item.assigned_testers.map((t) => t.display_name).join('、') || '未指派'}
+      <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
+        <span>
+          試做人：{item.maker_name || '—'}・評分人員：{item.assigned_testers.map((t) => t.display_name).join('、') || '未指派'}
+        </span>
+        <Button small variant="ghost" onClick={() => setAssignment(currentAssignment())}>
+          編輯指派
+        </Button>
+        {item.feedback.length === 0 && can.editRecipes(role) && (
+          <Button
+            small
+            variant="ghost"
+            loading={removeItem.isPending}
+            onClick={() => {
+              if (!confirm(`從這個場次移除「${item.recipe_name} v${item.version_no}」？`)) return;
+              removeItem.mutate(undefined, { onSuccess: () => toast('已移除試做項目'), onError: (e) => toast(e.message, 'danger') });
+            }}
+          >
+            <Trash2 className="size-4" aria-hidden />
+            移除
+          </Button>
+        )}
       </div>
 
       <PhotoStrip photos={item.photos} target={{ tasting_item_id: item.id }} canAdd canDelete={role === 'founder'} emptyText="還沒有試做照片" />
@@ -568,6 +690,37 @@ function TastingItemCard({ item }: { item: TastingItemDetail }) {
         )}
       </div>
       {proxy && <ProxyFeedbackSheet itemId={item.id} onClose={() => setProxy(false)} />}
+      {assignment && (
+        <Sheet
+          open
+          title={`編輯指派：${item.recipe_name} v${item.version_no}`}
+          onClose={() => setAssignment(null)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setAssignment(null)}>
+                取消
+              </Button>
+              <Button
+                block
+                loading={saveAssignment.isPending}
+                onClick={() =>
+                  saveAssignment.mutate(assignment, {
+                    onSuccess: () => {
+                      toast('已更新指派');
+                      setAssignment(null);
+                    },
+                    onError: (e) => toast(e.message, 'danger'),
+                  })
+                }
+              >
+                儲存
+              </Button>
+            </>
+          }
+        >
+          <ItemAssignmentFields value={assignment} onChange={setAssignment} team={team} />
+        </Sheet>
+      )}
     </Card>
   );
 }

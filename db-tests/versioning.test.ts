@@ -398,3 +398,63 @@ describe('照片權限（Storage policy 使用的函式）', () => {
     await expect(t.rpc(t.users.tester, 'can_delete_photo_file', { p_storage_path: path })).resolves.toBe(false);
   });
 });
+
+describe('試菜場次的項目增刪', () => {
+  it('建立後可以再加入項目；有評分的項目不能移除；測試人員不能加也不能移', async () => {
+    const a = await soupInTesting('加項目湯A');
+    const b = await soupInTesting('加項目湯B');
+    const session = await t.rpc<string>(t.users.manager, 'create_tasting_session', {
+      p: { tasted_on: '2026-09-22', title: '第一輪', items: [{ version_id: a.versionId, blind_label: 'A', assigned_tester_ids: [t.users.tester] }] },
+    });
+
+    await expectError(
+      t.rpc(t.users.tester, 'add_tasting_item', { p_session_id: session, p: { version_id: b.versionId } }),
+      '權限不足',
+    );
+    const itemB = await t.rpc<string>(t.users.manager, 'add_tasting_item', {
+      p_session_id: session,
+      p: { version_id: b.versionId, blind_label: 'B', assigned_tester_ids: [t.users.tester, t.users.tester2] },
+    });
+    await expectError(
+      t.rpc(t.users.chef, 'add_tasting_item', { p_session_id: session, p: { version_id: b.versionId } }),
+      '這個場次已經有此版本',
+    );
+
+    const detail = await t.rpc<{ items: Array<{ id: string; blind_label: string; assigned_testers: unknown[] }> }>(
+      t.users.chef,
+      'get_tasting_session',
+      { p_id: session },
+    );
+    expect(detail.items).toHaveLength(2);
+    expect(detail.items[1]).toMatchObject({ id: itemB, blind_label: 'B' });
+    expect(detail.items[1].assigned_testers).toHaveLength(2);
+
+    // 新加入的項目，被指派的人馬上看得到
+    const tasks = await t.rpc<Array<{ item_id: string }>>(t.users.tester2, 'get_my_tasting_tasks');
+    expect(tasks.map((x) => x.item_id)).toContain(itemB);
+
+    // 修改指派
+    await t.rpc(t.users.manager, 'update_tasting_item', {
+      p_id: itemB,
+      p: { blind_label: 'C', deviation_note: '火力偏小', assigned_tester_ids: [t.users.tester] },
+    });
+    const after = await t.rpc<{ items: Array<{ id: string; blind_label: string; deviation_note: string; assigned_testers: unknown[] }> }>(
+      t.users.chef,
+      'get_tasting_session',
+      { p_id: session },
+    );
+    const updated = after.items.find((x) => x.id === itemB)!;
+    expect(updated).toMatchObject({ blind_label: 'C', deviation_note: '火力偏小' });
+    expect(updated.assigned_testers).toHaveLength(1);
+
+    // 移除：有評分就不行
+    await expectError(t.rpc(t.users.tester, 'delete_tasting_item', { p_id: itemB }), '權限不足');
+    await t.rpc(t.users.tester, 'submit_feedback', { p_item_id: itemB, p: { score_overall: 3 } });
+    await expectError(t.rpc(t.users.chef, 'delete_tasting_item', { p_id: itemB }), '已經有評分的試做項目不能刪除');
+
+    const itemA = after.items.find((x) => x.id !== itemB)!;
+    await t.rpc(t.users.chef, 'delete_tasting_item', { p_id: itemA.id });
+    const final = await t.rpc<{ items: unknown[] }>(t.users.chef, 'get_tasting_session', { p_id: session });
+    expect(final.items).toHaveLength(1);
+  });
+});
