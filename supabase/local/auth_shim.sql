@@ -23,3 +23,7 @@ $$;
 
 grant usage on schema auth to anon, authenticated;
 grant execute on function auth.uid() to anon, authenticated;
+
+-- 和 Supabase 一樣：public schema 新建立的函式預設開放給 anon 與 authenticated。
+-- 所以每個 migration 結尾都要呼叫 app.finish_migration() 收回 anon 權限；db-tests 會檢查。
+alter default privileges in schema public grant execute on functions to anon, authenticated;

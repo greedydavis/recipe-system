@@ -60,7 +60,7 @@ npm test
 2. 在本機執行 `npm run db:bundle`，產生 `supabase/setup-all.sql`。
 3. Supabase 左側 **SQL Editor** → New query → 貼上 `setup-all.sql` 全部內容 → Run。
    - 會建立所有資料表、RPC、權限、照片 bucket 與存取規則
-   - 最後一列出現「安裝完成」代表成功（`rpc_count` 50、`table_count` 20、`photo_bucket` 1）
+   - 最後一列出現「安裝完成」代表成功；`schema_version` 等於最新 migration 的編號、`photo_bucket` 為 1
    - 整份檔案是一個交易：中途出錯會全部復原，修正後可以重新執行；已經裝好的專案再執行會被擋下
 4. **Project Settings → API Keys**：複製 Project URL 與 **Publishable key**。舊專案顯示的是 anon public key，兩者都可以用。
 5. **Authentication → Sign In / Providers → Email**：保持開啟。
@@ -97,6 +97,16 @@ GitHub repo → **Settings → Secrets and variables → Actions → Variables**
 2. 「更多 → 資料匯出與匯入 → 選擇 JSON 檔」，上傳本機的 `private/baseline-seed.json`，匯入基準版菜單
 3. 用手機開啟網站，上傳一張試做照片，確認照片可以看到
 4. 請其他成員註冊，由創辦人指派角色
+
+## 之後的資料庫更新
+
+已上線的專案不要再執行 `setup-all.sql`。有新的 migration 時：
+
+1. 看網站頂端的紅色提醒（或 Supabase 執行 `select max(version) from app.schema_migrations;`）知道目前的資料庫版本
+2. 本機執行 `npm run db:bundle -- --from <下一個版本>`，產生 `supabase/upgrade.sql`
+3. Supabase → SQL Editor → 貼上 `upgrade.sql` 全部內容 → Run；最後一列出現「升級完成」且 `schema_version` 是最新編號就完成了
+
+網站比資料庫新的時候，頂端會出現紅色提醒，執行完 SQL 重新整理就會消失。
 
 ## 備份
 

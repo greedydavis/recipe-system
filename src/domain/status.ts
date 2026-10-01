@@ -35,10 +35,9 @@ export function availableTransitions(from: VersionStatus, role: Role | null | un
   return TRANSITIONS.filter((t) => t.from === from && t.roles.includes(role));
 }
 
-export const isEditable = (status: VersionStatus) => status === 'draft';
-
-/** 可以被其他版本引用的狀態（內容已凍結） */
+/** 可以被其他版本引用、也可以加入試菜場次的狀態（內容已凍結） */
 export const isReferenceable = (status: VersionStatus) =>
   status === 'testing' || status === 'pending_approval' || status === 'locked';
 
-export const canBeTasted = isReferenceable;
+/** 可以新增或修改評分的狀態；已定版的版本可以放進場次當對照，但不收評分（和資料庫 app.feedback_editable 一致） */
+export const canReceiveFeedback = (status: VersionStatus) => status === 'testing' || status === 'pending_approval';

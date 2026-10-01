@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { type ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { type Backend, type SessionUser, getBackend } from '../data/backend';
 import type { Me } from '../data/types';
 import type { Role } from '../domain/types';
@@ -22,9 +22,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const currentUserId = useRef<string | null>(null);
 
   const load = useCallback(async (b: Backend) => {
     const s = await b.getSession();
+    currentUserId.current = s?.id ?? null;
     setSession(s);
     setMe(s ? await b.rpc<Me | null>('me') : null);
   }, []);
@@ -37,7 +39,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setBackend(b);
         await load(b);
-        unsubscribe = b.onAuthChange(() => {
+        unsubscribe = b.onAuthChange((userId) => {
+          // Supabase 每小時更新 token、切回分頁時也會通知；同一個人就不要清掉畫面資料（正在編輯的內容會不見）
+          if (userId === currentUserId.current) return;
+          currentUserId.current = userId;
           client.clear();
           load(b).catch((e: Error) => setError(e.message));
         });

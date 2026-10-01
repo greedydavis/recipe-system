@@ -62,6 +62,24 @@ export function dimensionLabel(d: Dimension): string {
   return d === 'mass' ? '重量' : d === 'volume' ? '容量' : '個數';
 }
 
+/**
+ * 原物料可以選的單位：專屬單位、同維度的系統單位；有密度時再加上重量／容量互換的單位。
+ * current 是目前已存的單位，即使不相容也保留在選項裡，避免畫面把它默默換掉。
+ */
+export function compatibleUnits(
+  ingredient: Pick<CostingIngredient, 'base_dimension' | 'density_g_per_ml' | 'units'>,
+  current?: string,
+): string[] {
+  const options = new Set<string>(ingredient.units.map((u) => u.unit_name));
+  const dims: Dimension[] = [ingredient.base_dimension];
+  if (decOrNull(ingredient.density_g_per_ml) && ingredient.base_dimension !== 'count') {
+    dims.push(ingredient.base_dimension === 'mass' ? 'volume' : 'mass');
+  }
+  for (const u of GLOBAL_UNITS) if (dims.includes(u.dimension)) options.add(u.code);
+  if (current) options.add(current);
+  return [...options];
+}
+
 /** 把原物料的某個用量換算成該原物料的基本單位（g、ml 或個） */
 export function toIngredientBase(qty: Dec, unit: string, ingredient: CostingIngredient): Result<Dec> {
   const custom = ingredient.units.find((u) => u.unit_name === unit);

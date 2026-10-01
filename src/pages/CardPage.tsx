@@ -4,6 +4,7 @@ import { useParams } from 'react-router';
 import { can, useRole } from '../app/auth';
 import { useCosts } from '../app/costing';
 import { formatDate, formatDateTime, toNum } from '../app/format';
+import { groupLines } from '../app/lines';
 import { RequireRole } from '../app/Layout';
 import { PhotoThumb } from '../components/photos';
 import { Button, Checkbox, ChipGroup, ErrorState, Loading, Notice, NumberInput, PageHeader, Select, StatusBadge, cx } from '../components/ui';
@@ -295,16 +296,6 @@ function StandardCard() {
 
 function lineName(l: VersionLine): string {
   return l.line_kind === 'ingredient' ? (l.ingredient_name ?? '') : `${l.component_name} v${l.component_version_no}`;
-}
-
-function groupLines(lines: VersionLine[]): Array<[string, VersionLine[]]> {
-  const groups: Array<[string, VersionLine[]]> = [];
-  for (const l of lines) {
-    const last = groups[groups.length - 1];
-    if (last && last[0] === l.group_label) last[1].push(l);
-    else groups.push([l.group_label, [l]]);
-  }
-  return groups;
 }
 
 function FragmentGroup({ group, colSpan, children }: { group: string; colSpan: number; children: ReactNode }) {

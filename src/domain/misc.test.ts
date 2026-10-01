@@ -4,7 +4,7 @@ import { diffLines, diffSteps } from './diff';
 import { altUnitHint, formatPercent, formatQty, formatServingCost, formatUnitCost } from './format';
 import { priceMetrics, suggestedPrice } from './pricing';
 import { scaleFactor } from './scaling';
-import { STATUSES, availableTransitions, transitionRoles } from './status';
+import { STATUSES, availableTransitions, canReceiveFeedback, isReferenceable, transitionRoles } from './status';
 import { DEFAULT_SETTINGS, version } from './__fixtures__/builders';
 
 describe('售價與毛利', () => {
@@ -166,5 +166,12 @@ describe('版本比較', () => {
     const d = diffSteps([s(1, '汆燙', 5), s(2, '小滾', 240)], [s(1, '汆燙', 8)]);
     expect(d[0]).toMatchObject({ change: 'changed', changedFields: ['時間'] });
     expect(d[1].change).toBe('removed');
+  });
+});
+
+describe('可以引用與評分的狀態', () => {
+  it('凍結的版本可以被引用、加入試菜；只有試菜中與待核准收評分', () => {
+    expect(STATUSES.filter(isReferenceable)).toEqual(['testing', 'pending_approval', 'locked']);
+    expect(STATUSES.filter(canReceiveFeedback)).toEqual(['testing', 'pending_approval']);
   });
 });

@@ -5,6 +5,7 @@ import { can, useRole } from '../app/auth';
 import { RequireRole } from '../app/Layout';
 import { type CostView, useCosts } from '../app/costing';
 import { formatDate, formatDateTime, formatScore, formatSigned, numStr, toNum } from '../app/format';
+import { groupLines } from '../app/lines';
 import { PhotoStrip } from '../components/photos';
 import {
   Badge,
@@ -29,9 +30,8 @@ import {
   useToast,
 } from '../components/ui';
 import { rpc, useAction, useRpc } from '../data/api';
-import type { VersionDetail, VersionLine } from '../data/types';
+import type { VersionDetail } from '../data/types';
 import {
-  altUnitHint,
   formatBatchCost,
   formatLineCost,
   formatNumber,
@@ -265,16 +265,6 @@ function Summary({ v, view }: { v: VersionDetail; view?: CostView }) {
       ))}
     </div>
   );
-}
-
-function groupLines(lines: VersionLine[]): Array<[string, VersionLine[]]> {
-  const groups: Array<[string, VersionLine[]]> = [];
-  for (const l of lines) {
-    const last = groups[groups.length - 1];
-    if (last && last[0] === l.group_label) last[1].push(l);
-    else groups.push([l.group_label, [l]]);
-  }
-  return groups;
 }
 
 function LinesTab({ v }: { v: VersionDetail }) {
@@ -747,6 +737,7 @@ function TransitionSheet({
             block
             variant={transition.tone === 'danger' ? 'danger' : 'primary'}
             loading={run.isPending}
+            disabled={transition.commentRequired && !comment.trim()}
             onClick={() =>
               run.mutate(undefined, {
                 onSuccess: () => {
@@ -781,7 +772,7 @@ function TransitionSheet({
         </Notice>
       )}
       {transition.commentLabel && (
-        <Field label={transition.commentLabel}>
+        <Field label={transition.commentLabel} hint={transition.commentRequired ? '必填' : undefined}>
           {(id) => <Textarea id={id} value={comment} onChange={(e) => setComment(e.target.value)} rows={4} />}
         </Field>
       )}
@@ -789,7 +780,7 @@ function TransitionSheet({
         <p className="text-sm">
           定版成本：每份 ${formatServingCost(view.cost.servingCost)}
           {view.metrics.foodCostRate && `、食材成本率 ${formatPercent(view.metrics.foodCostRate)}`}
-          {view.cost.batchOutputQty && view.cost.outputUnit && ` ${altUnitHint(view.cost.batchOutputQty, view.cost.outputUnit) ?? ''}`}
+          。實際寫入的快照由資料庫依今天的單價重新計算。
         </p>
       )}
     </Sheet>

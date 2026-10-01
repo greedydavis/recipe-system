@@ -2,7 +2,7 @@ import { ChevronRight, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { can, useRole } from '../app/auth';
-import { formatDate, numStr, todayIso, toNum } from '../app/format';
+import { formatDate, numStr, percentInputToRate, rateToPercentInput, todayIso, toNum } from '../app/format';
 import { RequireRole } from '../app/Layout';
 import {
   Badge,
@@ -33,7 +33,7 @@ import { ingredientUnitCost } from '../domain/costing';
 import { dec } from '../domain/decimal';
 import { formatLineCost, formatNumber, formatPercent } from '../domain/format';
 import type { CostingIngredient, Dimension } from '../domain/types';
-import { BASE_UNIT, GLOBAL_UNITS } from '../domain/units';
+import { BASE_UNIT, compatibleUnits } from '../domain/units';
 import { DIMENSION_LABEL, INGREDIENT_CATEGORY_LABEL, RECIPE_TYPE_LABEL } from '../i18n/labels';
 
 /** 顯示單價：g／ml 換算成每公斤／每公升比較好讀 */
@@ -137,7 +137,7 @@ function IngredientFormSheet({ ingredient, onClose }: { ingredient?: IngredientD
   const [name, setName] = useState(ingredient?.name ?? '');
   const [category, setCategory] = useState(ingredient?.category ?? 'other');
   const [base, setBase] = useState<Dimension>(ingredient?.base_dimension ?? 'mass');
-  const [waste, setWaste] = useState(ingredient ? String(Number(ingredient.default_waste_rate) * 100) : '0');
+  const [waste, setWaste] = useState(ingredient ? rateToPercentInput(ingredient.default_waste_rate) : '0');
   const [density, setDensity] = useState(numStr(ingredient?.density_g_per_ml));
   const [note, setNote] = useState(ingredient?.note ?? '');
   const [active, setActive] = useState(ingredient?.is_active ?? true);
@@ -148,7 +148,7 @@ function IngredientFormSheet({ ingredient, onClose }: { ingredient?: IngredientD
         name,
         category,
         base_dimension: base,
-        default_waste_rate: (toNum(waste) ?? 0) / 100,
+        default_waste_rate: percentInputToRate(waste) ?? 0,
         density_g_per_ml: toNum(density) ?? '',
         note,
         is_active: active,
@@ -473,7 +473,9 @@ function SpecSheet({ ingredient, spec, onClose }: { ingredient: IngredientDetail
       },
     }),
   );
-  const units = [...ingredient.units.map((u) => u.unit_name), ...GLOBAL_UNITS.map((u) => u.code)];
+  const units = compatibleUnits(ingredient, spec?.pack_unit);
+  // 已有報價的規格不能改數量或單位（資料庫也會擋）：改了等於把舊報價的單位成本一起改掉
+  const hasPrices = !!spec?.prices.some((pr) => !pr.is_void);
   return (
     <Sheet
       open
@@ -488,11 +490,14 @@ function SpecSheet({ ingredient, spec, onClose }: { ingredient: IngredientDetail
       <Field label="規格名稱" hint="採購時的叫法，例如「20 kg/箱」「1 台斤」「30 顆/盒」">
         {(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}
       </Field>
-      <Field label="每包裝的數量">
+      <Field
+        label="每包裝的數量"
+        hint={hasPrices ? '已有報價，數量與單位不能修改；規格變了請新增一個規格並設為預設' : undefined}
+      >
         {(id) => (
           <div className="flex gap-2">
-            <NumberInput id={id} value={qty} onChange={setQty} className="flex-1" />
-            <Select aria-label="單位" value={unit} onChange={(e) => setUnit(e.target.value)} className="w-28">
+            <NumberInput id={id} value={qty} onChange={setQty} className="flex-1" disabled={hasPrices} />
+            <Select aria-label="單位" value={unit} onChange={(e) => setUnit(e.target.value)} className="w-28" disabled={hasPrices}>
               {units.map((u) => (
                 <option key={u} value={u}>
                   {u === 'pc' ? '個' : u}

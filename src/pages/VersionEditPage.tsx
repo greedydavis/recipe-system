@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useBlocker, useNavigate, useParams } from 'react-router';
 import { RequireRole } from '../app/Layout';
-import { numStr, toNum } from '../app/format';
+import { numStr, percentInputToRate, rateToPercentInput, toNum } from '../app/format';
 import { PhotoStrip } from '../components/photos';
 import {
   Badge,
@@ -35,7 +35,7 @@ import { formatLineCost, formatPercent, formatPrice, formatServingCost } from '.
 import { priceMetrics } from '../domain/pricing';
 import { isReferenceable } from '../domain/status';
 import type { CostingBundle, CostingIngredient, CostingVersion, Dimension, OutputUnit, VersionStatus } from '../domain/types';
-import { BASE_UNIT, COMPONENT_LINE_UNITS, GLOBAL_UNITS } from '../domain/units';
+import { BASE_UNIT, COMPONENT_LINE_UNITS, compatibleUnits } from '../domain/units';
 import { COMPONENT_KIND_LABEL, DIMENSION_LABEL, HEAT_LABEL, INGREDIENT_CATEGORY_LABEL } from '../i18n/labels';
 
 interface DraftLine {
@@ -104,7 +104,7 @@ function formFromVersion(v: VersionDetail): DraftForm {
       component_status: l.component_status,
       quantity: numStr(l.quantity),
       unit: l.unit,
-      waste_percent: l.waste_rate_override === null ? '' : String(Number(l.waste_rate_override) * 100),
+      waste_percent: rateToPercentInput(l.waste_rate_override),
       prep_note: l.prep_note,
       group_label: l.group_label,
       expanded: false,
@@ -143,7 +143,7 @@ function payloadFromForm(form: DraftForm) {
       component_version_id: l.component_version_id,
       quantity: toNum(l.quantity) ?? '',
       unit: l.unit,
-      waste_rate_override: toNum(l.waste_percent) === null ? '' : toNum(l.waste_percent)! / 100,
+      waste_rate_override: percentInputToRate(l.waste_percent) ?? '',
       prep_note: l.prep_note,
       group_label: l.group_label,
     })),
@@ -505,17 +505,6 @@ function defaultUnit(ing: CostingIngredient): string {
   return BASE_UNIT[ing.base_dimension];
 }
 
-function unitOptions(ing: CostingIngredient | undefined, current: string): string[] {
-  if (!ing) return [current];
-  const options = new Set<string>();
-  ing.units.forEach((u) => options.add(u.unit_name));
-  const dims: Dimension[] = [ing.base_dimension];
-  if (ing.density_g_per_ml && ing.base_dimension !== 'count') dims.push(ing.base_dimension === 'mass' ? 'volume' : 'mass');
-  GLOBAL_UNITS.filter((u) => dims.includes(u.dimension)).forEach((u) => options.add(u.code));
-  options.add(current);
-  return [...options];
-}
-
 function QtyUnit({
   label,
   hint,
@@ -563,7 +552,7 @@ function LineEditor({
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
 }) {
-  const units = line.line_kind === 'component' ? COMPONENT_LINE_UNITS : unitOptions(ingredient, line.unit);
+  const units = line.line_kind === 'component' ? COMPONENT_LINE_UNITS : ingredient ? compatibleUnits(ingredient, line.unit) : [line.unit];
   const listId = `groups-${line.id}`;
   return (
     <Card className={cx('space-y-2 p-3', line.component_status === 'retired' && 'ring-2 ring-amber-300')}>
@@ -753,7 +742,7 @@ function LiveCost({
         component_version_id: l.component_version_id,
         quantity: toNum(l.quantity),
         unit: l.unit,
-        waste_rate_override: toNum(l.waste_percent) === null ? null : toNum(l.waste_percent)! / 100,
+        waste_rate_override: percentInputToRate(l.waste_percent),
         sort_order: i,
       })),
     };

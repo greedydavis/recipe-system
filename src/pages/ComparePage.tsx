@@ -9,6 +9,7 @@ import type { RecipeDetail, VersionDetail } from '../data/types';
 import { dec } from '../domain/decimal';
 import { type ChangeKind, diffLines, diffSteps } from '../domain/diff';
 import { formatNumber, formatPercent, formatQty, formatServingCost } from '../domain/format';
+import { STATUS_LABEL } from '../i18n/labels';
 
 const CHANGE_STYLE: Record<ChangeKind, string> = {
   added: 'bg-emerald-50',
@@ -79,7 +80,7 @@ function Compare() {
             {side === 'a' && <option value="">選擇版本</option>}
             {versions.map((v) => (
               <option key={v.id} value={v.id}>
-                v{v.version_no}（{v.title || v.status}）
+                v{v.version_no}（{STATUS_LABEL[v.status]}{v.title ? `・${v.title}` : ''}）
               </option>
             ))}
           </Select>

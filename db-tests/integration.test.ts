@@ -91,6 +91,111 @@ describe('操作紀錄', () => {
 });
 
 describe('基準版匯入', () => {
+  it('保留用料與步驟順序、菜品批次產量＝每份量、元件先建；送試菜失敗只留警告；重新匯入會全部略過', async () => {
+    const file = {
+      source: '測試檔',
+      generated_at: '2026-10-02T00:00:00Z',
+      ingredients: [
+        { name: '匯入骨', category: 'meat', base_dimension: 'mass' },
+        { name: '匯入水', category: 'other', base_dimension: 'volume', density_g_per_ml: 1 },
+        { name: '匯入麵', category: 'grain', base_dimension: 'mass' },
+      ],
+      recipes: [
+        // 菜品寫在元件前面：匯入時仍要先建元件
+        {
+          name: '匯入菜',
+          type: 'dish',
+          menu_category: '湯麵',
+          to_testing: true,
+          version: {
+            title: '基準版',
+            serving_qty: 600,
+            serving_unit: 'g',
+            lines: [
+              { component: '匯入湯', quantity: 380, unit: 'ml' },
+              { ingredient: '匯入麵', quantity: 150, unit: 'g' },
+            ],
+            steps: [{ instruction: '煮麵' }, { instruction: '加湯' }],
+          },
+        },
+        {
+          name: '匯入湯',
+          type: 'component',
+          component_kind: 'soup',
+          to_testing: true,
+          version: {
+            title: '基準版',
+            batch_output_qty: 10000,
+            batch_output_unit: 'ml',
+            serving_qty: 380,
+            serving_unit: 'ml',
+            lines: [
+              { ingredient: '匯入骨', quantity: 2000, unit: 'g' },
+              { ingredient: '匯入水', quantity: 12, unit: 'L' },
+            ],
+            steps: [{ instruction: '汆燙' }, { instruction: '熬煮' }, { instruction: '過濾' }],
+          },
+        },
+        {
+          name: '匯入待填菜',
+          type: 'dish',
+          to_testing: true,
+          version: { title: '基準版', lines: [{ ingredient: '匯入麵', quantity: null, unit: 'g' }], steps: [] },
+        },
+      ],
+    };
+    const result = await t.rpc<{ created_ingredients: number; created_recipes: number; warnings: string[] }>(
+      t.users.founder,
+      'import_baseline',
+      { p_file: file },
+    );
+    expect(result).toMatchObject({ created_ingredients: 3, created_recipes: 3 });
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain('「匯入待填菜」無法送試菜，保留為草案');
+
+    type V = {
+      status: string;
+      serving_qty: number;
+      batch_output_qty: number;
+      lines: Array<{ ingredient_name: string | null; component_name: string | null }>;
+      steps: Array<{ step_no: number; instruction: string }>;
+    };
+    const version = async (name: string, type: string) => {
+      const [r] = await t.rpc<Array<{ latest: { id: string } }>>(t.users.chef, 'list_recipes', { p_type: type, p_q: name });
+      return t.rpc<V>(t.users.chef, 'get_version', { p_id: r.latest.id });
+    };
+    const soup = await version('匯入湯', 'component');
+    expect(soup.status).toBe('testing');
+    expect(soup.lines.map((l) => l.ingredient_name)).toEqual(['匯入骨', '匯入水']);
+    expect(soup.steps.map((s) => [s.step_no, s.instruction])).toEqual([
+      [1, '汆燙'],
+      [2, '熬煮'],
+      [3, '過濾'],
+    ]);
+    const dish = await version('匯入菜', 'dish');
+    expect(dish).toMatchObject({ status: 'testing', serving_qty: 600, batch_output_qty: 600 });
+    expect(dish.lines.map((l) => l.component_name ?? l.ingredient_name)).toEqual(['匯入湯', '匯入麵']);
+    expect((await version('匯入待填菜', 'dish')).status).toBe('draft');
+
+    const again = await t.rpc(t.users.founder, 'import_baseline', { p_file: file });
+    expect(again).toMatchObject({ created_ingredients: 0, skipped_ingredients: 3, created_recipes: 0, skipped_recipes: 3 });
+  });
+
+  it('不適用的單位會擋下整次匯入；只有創辦人可以匯入', async () => {
+    const file = {
+      source: '測試檔',
+      generated_at: '2026-10-02T00:00:00Z',
+      ingredients: [{ name: '單位錯原料', category: 'other', base_dimension: 'mass' }],
+      recipes: [
+        { name: '單位錯菜', type: 'dish', version: { title: '', lines: [{ ingredient: '單位錯原料', quantity: 1, unit: '把' }], steps: [] } },
+      ],
+    };
+    await expectError(t.rpc(t.users.founder, 'import_baseline', { p_file: file }), '單位「把」不適用於「單位錯原料」');
+    const [{ n }] = await t.sql<{ n: number }>(`select count(*)::int as n from app.ingredients where name = '單位錯原料'`);
+    expect(n).toBe(0);
+    await expectError(t.rpc(t.users.chef, 'import_baseline', { p_file: file }), '權限不足');
+  });
+
   it('任一筆資料無法解析時，整個匯入交易都會回復', async () => {
     await expectError(
       t.rpc(t.users.founder, 'import_baseline', {
@@ -163,7 +268,7 @@ async function buildGolden(prefix: string) {
     ],
   });
   await t.rpc(t.users.founder, 'set_menu_price', { p_recipe_id: dish.recipeId, p_price: 90, p_effective_date: '2026-01-01', p_note: '' });
-  return { soup, dish };
+  return { soup, dish, onionSpec: onion.specId! };
 }
 
 describe('RPC 成本資料 + 前端計算 = 黃金範例', () => {
@@ -184,32 +289,42 @@ describe('RPC 成本資料 + 前端計算 = 黃金範例', () => {
     expect(m.suggestedPrice?.toString()).toBe(expected.dish.suggestedPrice);
   });
 
-  // CLAUDE.md §3：定版快照改由資料庫重算後，兩套實作都要對到同一組手算答案，才不會各算各的。
-  it('資料庫重算的定版快照，和前端算的黃金範例一致', async () => {
+  // CLAUDE.md §3：定版快照由資料庫重算，兩套實作都要對到同一組手算答案，才不會各算各的。
+  it('資料庫重算的成本快照，和前端算的黃金範例一致（湯底還在試菜中也一樣）', async () => {
     const { soup, dish } = await buildGolden('伺服器黃金');
-
-    const snap = async (versionId: string, key: string) => {
-      const [row] = await t.sql<{ value: string | null }>(
-        `select round((app.server_cost_snapshot($1) ->> $2)::numeric, 10)::text as value`,
-        [versionId, key],
-      );
-      return row.value;
-    };
 
     expect(await snap(soup.versionId, 'batch_cost')).toBe(expected.soup.batchCost);
     expect(await snap(soup.versionId, 'yield_rate')).toBe(expected.soup.yieldRate);
     expect(await snap(soup.versionId, 'cost_per_serving')).toBe(expected.soup.servingCost);
+    expect(await snap(dish.versionId, 'cost_per_serving')).toBe(expected.dish.servingCost);
+    expect(await snap(dish.versionId, 'food_cost_rate')).toBe(expected.dish.foodCostRate);
+  });
 
-    // 菜品引用元件時，資料庫取的是元件「已定版」的成本快照，所以要先把湯底定版。
+  it('元件定版後原料漲價：菜品快照和前端一樣用今天的單價重算元件成本', async () => {
+    const { soup, dish, onionSpec } = await buildGolden('漲價黃金');
     const session = await t.rpc<string>(t.users.chef, 'create_tasting_session', {
-      p: { tasted_on: '2026-09-22', title: '黃金範例試菜', items: [{ version_id: soup.versionId, assigned_tester_ids: [t.users.tester] }] },
+      p: { tasted_on: '2026-09-22', title: '漲價試菜', items: [{ version_id: soup.versionId, assigned_tester_ids: [t.users.tester] }] },
     });
     const detail = await t.rpc<{ items: Array<{ id: string }> }>(t.users.chef, 'get_tasting_session', { p_id: session });
     await t.rpc(t.users.tester, 'submit_feedback', { p_item_id: detail.items[0].id, p: { score_overall: 4 } });
     await transition(t, t.users.chef, soup.versionId, 'pending_approval', '送審');
     await transition(t, t.users.founder, soup.versionId, 'locked');
 
-    expect(await snap(dish.versionId, 'cost_per_serving')).toBe(expected.dish.servingCost);
-    expect(await snap(dish.versionId, 'food_cost_rate')).toBe(expected.dish.foodCostRate);
+    // 湯底定版之後洋蔥漲價（生效日早於今天，所以今天有效）
+    await t.rpc(t.users.chef, 'add_purchase_price', { p_spec_id: onionSpec, p_price: 800, p_effective_date: '2026-06-01', p_note: '' });
+
+    const bundle = await t.rpc<CostingBundle>(t.users.manager, 'get_costing_bundle', { p_version_ids: [dish.versionId] });
+    const front = computeVersionCost(bundle, dish.versionId);
+    expect(front.servingCost?.toFixed(10)).not.toBe(expected.dish.servingCost);
+    expect(await snap(dish.versionId, 'cost_per_serving')).toBe(front.servingCost?.toFixed(10));
   });
 });
+
+async function snap(versionId: string, key: string) {
+  const [row] = await t.sql<{ value: string | null }>(
+    `select round((app.server_cost_snapshot($1) ->> $2)::numeric, 10)::text as value`,
+    [versionId, key],
+  );
+  return row.value;
+}
+

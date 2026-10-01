@@ -20,7 +20,8 @@ export interface DemoUser {
 export interface Backend {
   mode: 'supabase' | 'demo';
   getSession(): Promise<SessionUser | null>;
-  onAuthChange(callback: () => void): () => void;
+  /** 登入狀態改變時呼叫，帶出目前的使用者 id（未登入為 null）；token 自動更新也可能觸發，呼叫端要自己判斷有沒有換人 */
+  onAuthChange(callback: (userId: string | null) => void): () => void;
   signIn(email: string, password: string): Promise<void>;
   signUp(email: string, password: string, displayName: string): Promise<void>;
   signOut(): Promise<void>;

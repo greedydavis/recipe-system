@@ -40,7 +40,7 @@ import type {
   TastingSessionListItem,
   TeamMember,
 } from '../data/types';
-import { isReferenceable } from '../domain/status';
+import { canReceiveFeedback, isReferenceable } from '../domain/status';
 import { DECISION_LABEL, DECISION_TONE, MENU_READY_LABEL, OILINESS_LABELS, ROLE_LABEL, SALTINESS_LABELS } from '../i18n/labels';
 
 // ───────────────────────── 列表 ─────────────────────────
@@ -376,7 +376,7 @@ function VersionPicker({
             ← 回到清單
           </Button>
           {detail.isLoading && <Loading />}
-          <p className="text-sm text-muted">草案內容還會變動，必須先「送試菜」才能試做。</p>
+          <p className="text-sm text-muted">草案內容還會變動，必須先「送試菜」才能試做。已定版的版本可以放進來當對照，但不收評分。</p>
           <div className="space-y-2">
             {detail.data?.versions.map((ver) => (
               <button
@@ -638,7 +638,7 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
     rpc('update_tasting_item', { p_id: item.id, p }),
   );
   const saveAssignment = useAction((value: ItemAssignment) =>
-    rpc('update_tasting_item', { p_id: item.id, p: { deviation_note: item.deviation_note, ...assignmentPayload(value) } }),
+    rpc('update_tasting_item', { p_id: item.id, p: assignmentPayload(value) }),
   );
   const removeItem = useAction(() => rpc('delete_tasting_item', { p_id: item.id }));
   const newVersion = useAction(() => {
@@ -657,6 +657,7 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
 
   const assignedToMe = item.assigned_testers.some((t) => t.id === me.id);
   const myFeedback = item.feedback.find((f) => f.taster_id === me.id);
+  const scorable = canReceiveFeedback(item.version_status);
 
   return (
     <Card className={cx('space-y-3', item.version_status === 'retired' && 'opacity-70')}>
@@ -710,7 +711,11 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
           </div>
         </div>
       ) : (
-        <button type="button" onClick={() => setEditing(true)} className="block min-h-11 w-full rounded-xl bg-stone-50 px-3 py-2 text-left text-sm hover:bg-stone-100">
+        <button
+          type="button"
+          onClick={() => (setDeviation(item.deviation_note), setEditing(true))}
+          className="block min-h-11 w-full rounded-xl bg-stone-50 px-3 py-2 text-left text-sm hover:bg-stone-100"
+        >
           <span className="font-medium">實際做法偏差：</span>
           {item.deviation_note || <span className="text-muted">（點此記錄）</span>}
         </button>
@@ -794,13 +799,18 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
         )}
       </div>
 
+      {!scorable && (
+        <p className="text-sm text-muted">
+          版本已{item.version_status === 'locked' ? '定版' : '停用'}，不再收評分（評分只在試菜中、待核准時開放）。
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
-        {assignedToMe && item.version_status !== 'retired' && (
+        {assignedToMe && scorable && (
           <LinkButton small to={`/tasting-items/${item.id}/feedback`} variant={myFeedback ? 'secondary' : 'primary'}>
             {myFeedback ? '修改我的評分' : '填寫我的評分'}
           </LinkButton>
         )}
-        {item.version_status !== 'retired' && (
+        {scorable && (
           <Button small variant="secondary" onClick={() => setProxy(true)}>
             代填外部評分
           </Button>

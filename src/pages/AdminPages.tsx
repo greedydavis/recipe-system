@@ -1,8 +1,9 @@
 import { ChevronRight, Download, Upload } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { can, useAuth, useMe } from '../app/auth';
-import { formatDateTime, toNum } from '../app/format';
+import { formatDateTime, percentInputToRate, rateToPercentInput, todayIso, toNum } from '../app/format';
 import { RequireRole } from '../app/Layout';
 import {
   Badge,
@@ -202,8 +203,8 @@ function SettingsForm() {
   if (settings.error || !settings.data) return <ErrorState error={settings.error} />;
   const s = settings.data;
   const values = draft ?? {
-    target: String(Number(s.target_food_cost_rate) * 100),
-    tax: String(Number(s.sales_tax_rate) * 100),
+    target: rateToPercentInput(s.target_food_cost_rate),
+    tax: rateToPercentInput(s.sales_tax_rate),
     round: String(s.price_round_to),
     requireTasting: s.require_tasting_before_approval,
   };
@@ -237,8 +238,9 @@ function SettingsForm() {
             onClick={() =>
               save.mutate(
                 {
-                  target_food_cost_rate: (toNum(values.target as string) ?? 0) / 100,
-                  sales_tax_rate: (toNum(values.tax as string) ?? 0) / 100,
+                  // 設定值必須是 JSON 數字；由十進位字串轉回來，不會有浮點數尾巴
+                  target_food_cost_rate: Number(percentInputToRate(values.target as string) ?? 0),
+                  sales_tax_rate: Number(percentInputToRate(values.tax as string) ?? 0),
                   price_round_to: toNum(values.round as string) ?? 0,
                   require_tasting_before_approval: values.requireTasting,
                 },
@@ -372,6 +374,7 @@ export function DataPage() {
 
 function DataTools() {
   const toast = useToast();
+  const client = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
   const [log, setLog] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -383,9 +386,10 @@ function DataTools() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `試菜與標準食譜系統_備份_${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `試菜與標準食譜系統_備份_${todayIso()}.json`;
       a.click();
-      URL.revokeObjectURL(url);
+      // 立刻撤銷網址時，部分手機瀏覽器會取消下載
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
       toast('已下載備份');
     } catch (e) {
       toast((e as Error).message, 'danger');
@@ -399,10 +403,11 @@ function DataTools() {
       await importBaseline(file, (line) => setLog((xs) => [...xs, line]));
       toast('匯入完成');
     } catch (e) {
-      setLog((xs) => [...xs, `❌ ${(e as Error).message}`]);
+      setLog((xs) => [...xs, `❌ ${(e as Error).message}（整批沒有寫入，修正後可以直接重新匯入）`]);
       toast((e as Error).message, 'danger');
     } finally {
       setBusy(false);
+      await client.invalidateQueries();
     }
   }
 
@@ -451,7 +456,15 @@ function DataTools() {
             onChange={async (e) => {
               const f = e.target.files?.[0];
               e.target.value = '';
-              if (f) await runImport(JSON.parse(await f.text()) as BaselineFile);
+              if (!f) return;
+              let parsed: BaselineFile;
+              try {
+                parsed = JSON.parse(await f.text()) as BaselineFile;
+              } catch {
+                toast('這個檔案不是有效的 JSON', 'danger');
+                return;
+              }
+              await runImport(parsed);
             }}
           />
           {log.length > 0 && (

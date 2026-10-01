@@ -1,7 +1,7 @@
 import { AlertTriangle, ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { useCosts } from '../app/costing';
+import type { ProgressSummary } from '../app/progress';
 import { useProgress } from './ProgressPage';
 import { formatDate, formatDateTime } from '../app/format';
 import { useMe } from '../app/auth';
@@ -60,9 +60,8 @@ function MyTasks({ tasks, loading }: { tasks?: MyTastingTask[]; loading: boolean
   );
 }
 
-function ProgressCard() {
-  const { summary, isLoading } = useProgress();
-  if (isLoading || summary.dishes.total === 0) return null;
+function ProgressCard({ summary }: { summary: ProgressSummary }) {
+  if (summary.dishes.total === 0) return null;
   const pct = Math.round((summary.dishes.locked / summary.dishes.total) * 100);
   return (
     <Link to="/progress" className="block">
@@ -86,24 +85,23 @@ function ProgressCard() {
 }
 
 function KitchenDashboard({ data }: { data: Dashboard }) {
-  const dishIds = (data.dish_cost_versions ?? []).map((d) => d.version_id);
-  const costs = useCosts(dishIds);
-  const overTarget = (data.dish_cost_versions ?? [])
-    .map((d) => ({ ...d, view: costs.views?.get(d.version_id) }))
-    .filter((d) => d.view?.metrics.overTarget);
-  const incompleteCount = (data.dish_cost_versions ?? []).filter((d) => costs.views?.get(d.version_id)?.cost.isComplete === false).length;
+  // 成本與進度頁共用同一份計算（每道菜：有定版看定版，否則看最新且未停用的版本），不必再多抓一次成本資料
+  const progress = useProgress();
+  const costRows = progress.costsLoading ? [] : progress.summary.costRows;
+  const overTarget = costRows.filter((r) => r.overTarget);
+  const incompleteCount = costRows.filter((r) => !r.complete).length;
 
   return (
     <div className="space-y-6">
-      <ProgressCard />
+      {!progress.isLoading && <ProgressCard summary={progress.summary} />}
       <div className="grid grid-cols-3 gap-2">
-        <Stat label="待核准" value={data.pending_approvals?.length ?? 0} to="#pending" />
-        <Stat label="試菜中" value={data.testing_versions?.length ?? 0} to="#testing" />
+        <Stat label="待核准" value={data.pending_approvals?.length ?? 0} target="pending" />
+        <Stat label="試菜中" value={data.testing_versions?.length ?? 0} target="testing" />
         <Stat label="草案" value={data.draft_count ?? 0} to="/recipes" />
       </div>
 
       <Section title="待核准" className="scroll-mt-4">
-        <div id="pending" />
+        <div id="pending" className="scroll-mt-4" />
         {(data.pending_approvals ?? []).length === 0 ? (
           <EmptyState title="目前沒有待核准的版本" />
         ) : (
@@ -125,9 +123,8 @@ function KitchenDashboard({ data }: { data: Dashboard }) {
         <Section title="需要注意">
           <div className="space-y-2">
             {overTarget.map((d) => (
-              <Alert key={d.version_id} to={`/versions/${d.version_id}?tab=cost`}>
-                {d.recipe_name} v{d.version_no} 食材成本率 {formatPercent(d.view!.metrics.foodCostRate)}，超過目標{' '}
-                {formatPercent(d.view!.metrics.targetRate)}
+              <Alert key={d.versionId} to={`/versions/${d.versionId}?tab=cost`}>
+                {d.name} v{d.versionNo} 食材成本率 {formatPercent(d.foodCostRate)}，超過目標 {formatPercent(d.targetRate)}
               </Alert>
             ))}
             {(data.outdated_references ?? []).map((r) => (
@@ -152,7 +149,7 @@ function KitchenDashboard({ data }: { data: Dashboard }) {
       )}
 
       <Section title="試菜中">
-        <div id="testing" />
+        <div id="testing" className="scroll-mt-4" />
         {(data.testing_versions ?? []).length === 0 ? (
           <EmptyState title="目前沒有試菜中的版本" />
         ) : (
@@ -187,14 +184,26 @@ function KitchenDashboard({ data }: { data: Dashboard }) {
   );
 }
 
-function Stat({ label, value, to }: { label: string; value: number; to: string }) {
+function Stat({ label, value, to, target }: { label: string; value: number; to?: string; target?: string }) {
   const body = (
     <Card className="text-center hover:bg-brand-50">
       <div className="text-2xl font-bold text-brand-700 tabular-nums">{value}</div>
       <div className="text-sm text-muted">{label}</div>
     </Card>
   );
-  return to.startsWith('#') ? <a href={to}>{body}</a> : <Link to={to}>{body}</Link>;
+  // 路由用的是網址的 # 部分，所以不能用 <a href="#pending">（會被當成另一個頁面）
+  if (target) {
+    return (
+      <button
+        type="button"
+        className="block w-full text-left"
+        onClick={() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+      >
+        {body}
+      </button>
+    );
+  }
+  return <Link to={to ?? '/'}>{body}</Link>;
 }
 
 function VersionRow({ to, title, subtitle, badge }: { to: string; title: string; subtitle: string; badge: ReactNode }) {

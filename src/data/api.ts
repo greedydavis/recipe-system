@@ -19,11 +19,14 @@ export function useRpc<T>(
   });
 }
 
-/** 寫入型操作；成功後重新整理所有資料（資料量小，簡單可靠） */
+/**
+ * 寫入型操作；結束後重新整理所有資料（資料量小，簡單可靠）。
+ * 失敗時也重新整理：例如一次上傳多張照片，前幾張已經存進去，畫面要看得到。
+ */
 export function useAction<TArgs, TResult = unknown>(action: (args: TArgs) => Promise<TResult>) {
   const client = useQueryClient();
   return useMutation<TResult, Error, TArgs>({
     mutationFn: action,
-    onSuccess: () => client.invalidateQueries(),
+    onSettled: () => client.invalidateQueries(),
   });
 }

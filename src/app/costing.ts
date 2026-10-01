@@ -11,7 +11,9 @@ export interface CostView {
 
 /** 取得多個版本的成本（含巢狀元件），在前端用 src/domain 計算 */
 export function useCosts(versionIds: string[], enabled = true) {
-  const ids = useMemo(() => [...new Set(versionIds)].sort(), [versionIds]);
+  // 呼叫端常常每次 render 都傳新的陣列；用內容當 key，避免每次都重算全部成本
+  const key = [...new Set(versionIds)].sort().join(',');
+  const ids = useMemo(() => (key ? key.split(',') : []), [key]);
   const query = useRpc<CostingBundle>('get_costing_bundle', { p_version_ids: ids }, { enabled: enabled && ids.length > 0 });
   const views = useMemo(() => {
     const bundle = query.data;

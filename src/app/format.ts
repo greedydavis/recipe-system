@@ -1,3 +1,5 @@
+import { dec } from '../domain/decimal';
+
 const TZ = 'Asia/Taipei';
 
 export function formatDate(value: string | null | undefined): string {
@@ -39,6 +41,20 @@ export function formatSigned(value: number | null | undefined): string {
   const n = Number(value);
   const s = n.toFixed(1).replace(/\.0$/, '');
   return n > 0 ? `+${s}` : s;
+}
+
+/**
+ * 比例（0.07）→ 表單上的百分比字串（"7"）。用 Decimal 換算，避免 0.07 × 100 = 7.000000000000001。
+ */
+export function rateToPercentInput(rate: number | string | null | undefined): string {
+  if (rate === null || rate === undefined || rate === '') return '';
+  return dec(rate).mul(100).toString();
+}
+
+/** 表單上的百分比字串（"7"）→ 比例字串（"0.07"）；空白回傳 null */
+export function percentInputToRate(value: string): string | null {
+  const n = toNum(value);
+  return n === null ? null : dec(value.trim()).div(100).toString();
 }
 
 /** 表單數字欄位：字串 → 數字或 null */

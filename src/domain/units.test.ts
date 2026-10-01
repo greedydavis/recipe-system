@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dec } from './decimal';
 import { ingredient, version } from './__fixtures__/builders';
-import { ingredientBaseToGrams, toComponentOutputUnit, toIngredientBase } from './units';
+import { compatibleUnits, ingredientBaseToGrams, toComponentOutputUnit, toIngredientBase } from './units';
 
 const val = (r: ReturnType<typeof toIngredientBase>) => (r.ok ? r.value.toString() : `ERR:${r.issue}`);
 
@@ -76,5 +76,23 @@ describe('元件用量換算成產出單位', () => {
   it('不接受計數或湯匙單位', () => {
     expect(toComponentOutputUnit(dec(1), 'pc', sauceG).ok).toBe(false);
     expect(toComponentOutputUnit(dec(1), '大匙', soupMl).ok).toBe(false);
+  });
+});
+
+describe('原物料可選的單位', () => {
+  it('專屬單位在前，接著同維度的系統單位；有密度才加入重量／容量互換', () => {
+    const egg = ingredient({ name: '雞蛋', base: 'mass', units: [{ unit_name: '顆', qty_in_base: 60 }] });
+    expect(compatibleUnits(egg)).toEqual(['顆', 'g', 'kg', '台斤', '兩']);
+    const soy = ingredient({ name: '醬油', base: 'volume', density: 1.2 });
+    expect(compatibleUnits(soy)).toEqual(['g', 'kg', '台斤', '兩', 'ml', 'L', '大匙', '小匙']);
+    const oil = ingredient({ name: '沙拉油', base: 'volume' });
+    expect(compatibleUnits(oil)).toEqual(['ml', 'L', '大匙', '小匙']);
+  });
+
+  it('個數不和重量／容量互換；已存的單位就算不相容也保留', () => {
+    const lemon = ingredient({ name: '檸檬', base: 'count', density: 1, units: [{ unit_name: '片', qty_in_base: 0.125 }] });
+    expect(compatibleUnits(lemon)).toEqual(['片', 'pc']);
+    const pork = ingredient({ name: '豬肉', base: 'mass' });
+    expect(compatibleUnits(pork, 'ml')).toEqual(['g', 'kg', '台斤', '兩', 'ml']);
   });
 });

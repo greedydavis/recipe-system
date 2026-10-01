@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { can, useRole } from '../app/auth';
 import { RequireRole } from '../app/Layout';
 import { useCosts } from '../app/costing';
-import { formatDate, formatScore, todayIso, toNum } from '../app/format';
+import { formatDate, formatScore, percentInputToRate, rateToPercentInput, todayIso, toNum } from '../app/format';
 import {
   Badge,
   Button,
@@ -243,7 +243,7 @@ function EditRecipeSheet({ recipe, open, onClose }: { recipe: RecipeDetail; open
   const [description, setDescription] = useState(recipe.description);
   const [category, setCategory] = useState(recipe.menu_category);
   const [kind, setKind] = useState<ComponentKind>(recipe.component_kind ?? 'other');
-  const [target, setTarget] = useState(recipe.target_food_cost_rate ? String(Number(recipe.target_food_cost_rate) * 100) : '');
+  const [target, setTarget] = useState(rateToPercentInput(recipe.target_food_cost_rate));
   const save = useAction((p: Record<string, unknown>) => rpc('update_recipe', { p_id: recipe.id, p }));
 
   return (
@@ -256,14 +256,13 @@ function EditRecipeSheet({ recipe, open, onClose }: { recipe: RecipeDetail; open
           block
           loading={save.isPending}
           onClick={() => {
-            const t = toNum(target);
             save.mutate(
               {
                 name,
                 description,
                 menu_category: category,
                 component_kind: kind,
-                target_food_cost_rate: t === null ? '' : t / 100,
+                target_food_cost_rate: percentInputToRate(target) ?? '',
               },
               { onSuccess: () => (toast('已儲存'), onClose()), onError: (e) => toast(e.message, 'danger') },
             );

@@ -136,11 +136,11 @@ export async function createDemoBackend(): Promise<Backend> {
     });
   };
   db = await openDatabase(seed);
-  const listeners = new Set<() => void>();
+  const listeners = new Set<(userId: string | null) => void>();
   let userId = readSession();
   const objectUrls = new Map<string, string>();
 
-  const notify = () => listeners.forEach((cb) => cb());
+  const notify = () => listeners.forEach((cb) => cb(userId));
 
   async function rpcAs<T>(uid: string | null, fn: string, args: Record<string, unknown> = {}): Promise<T> {
     if (!/^[a-z_]+$/.test(fn)) throw new RpcError('無效的操作');

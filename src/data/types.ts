@@ -429,7 +429,6 @@ export interface Dashboard {
     status: VersionStatus;
     updated_at: string;
   }>;
-  dish_cost_versions?: Array<{ recipe_id: string; recipe_name: string; version_id: string; version_no: number; status: VersionStatus }>;
 }
 
 export interface AuditLog {

@@ -8,3 +8,4 @@ coverage/
 private/
 supabase/setup-all.sql
 *.tsbuildinfo
+supabase/upgrade.sql

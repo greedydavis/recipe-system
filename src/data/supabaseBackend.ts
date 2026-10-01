@@ -16,7 +16,7 @@ export function createSupabaseBackend(url: string, anonKey: string): Backend {
     },
 
     onAuthChange(callback) {
-      const { data } = client.auth.onAuthStateChange(() => callback());
+      const { data } = client.auth.onAuthStateChange((_event, session) => callback(session?.user.id ?? null));
       return () => data.subscription.unsubscribe();
     },
 

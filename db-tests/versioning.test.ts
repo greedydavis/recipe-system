@@ -612,3 +612,71 @@ describe('試菜總結與決議', () => {
     expect(list.find((x) => x.id === session)).toMatchObject({ has_summary: true, decided_count: 1 });
   });
 });
+
+describe('全系統校正（2026-10-02）', () => {
+  it('送核准時資料庫也檢查成本完整：單位無法換算會被擋下並列出原因', async () => {
+    const d = await createRecipe(t, { type: 'dish', name: '單位錯誤菜' });
+    // 豬大骨是以公克計價，沒有密度就不能用毫升
+    await saveDraft(t, d.versionId, {
+      serving: [500, 'g'],
+      lines: [{ line_kind: 'ingredient', ingredient_id: bone, quantity: 100, unit: 'ml' }],
+    });
+    await expectError(
+      transition(t, t.users.chef, d.versionId, 'pending_approval', '直接送審'),
+      /成本不完整.*「豬大骨」的用量單位「ml」無法換算/,
+    );
+  });
+
+  it('評分只收試菜中／待核准：定版後沒評過的項目不再是待辦，評過的保留但不能再送', async () => {
+    const soup = await soupInTesting('定版後待辦湯');
+    const itemId = await addFeedback(soup.versionId);
+    await t.rpc(t.users.chef, 'update_tasting_item', { p_id: itemId, p: { assigned_tester_ids: [t.users.tester, t.users.tester2] } });
+
+    const before = await t.rpc<Array<{ item_id: string; can_submit: boolean }>>(t.users.tester2, 'get_my_tasting_tasks');
+    expect(before.find((x) => x.item_id === itemId)).toMatchObject({ can_submit: true });
+    const openBefore = (await t.rpc<{ my_open_tasting_tasks: number }>(t.users.tester2, 'get_dashboard')).my_open_tasting_tasks;
+
+    await lock(soup.versionId);
+
+    const tester2Tasks = await t.rpc<Array<{ item_id: string }>>(t.users.tester2, 'get_my_tasting_tasks');
+    expect(tester2Tasks.find((x) => x.item_id === itemId)).toBeUndefined();
+    expect((await t.rpc<{ my_open_tasting_tasks: number }>(t.users.tester2, 'get_dashboard')).my_open_tasting_tasks).toBe(openBefore - 1);
+
+    const testerTasks = await t.rpc<Array<{ item_id: string; can_submit: boolean; my_feedback: unknown }>>(
+      t.users.tester,
+      'get_my_tasting_tasks',
+    );
+    expect(testerTasks.find((x) => x.item_id === itemId)).toMatchObject({ can_submit: false });
+  });
+
+  it('菜品清單的「最新版本」略過已放棄（停用）的版本', async () => {
+    const soup = await soupInTesting('放棄新版湯');
+    const v2 = await t.rpc<string>(t.users.chef, 'copy_version', { p_source_id: soup.versionId });
+    await transition(t, t.users.chef, v2, 'testing');
+    await transition(t, t.users.chef, v2, 'retired', '方向錯了');
+    const list = await t.rpc<Array<{ id: string; latest: { id: string; version_no: number; status: string } }>>(
+      t.users.chef,
+      'list_recipes',
+      { p_type: 'component', p_q: '放棄新版湯' },
+    );
+    expect(list[0].latest).toMatchObject({ id: soup.versionId, version_no: 1, status: 'testing' });
+  });
+
+  it('包裝規格已有報價時不能修改包裝數量或單位（名稱、供應商可以改）', async () => {
+    const ing = await createIngredient(t, { name: '規格測試蔥', packQty: 3, packUnit: 'kg', price: 270 });
+    const base = { id: ing.specId, ingredient_id: ing.id, spec_name: '3 kg', pack_qty: 3, pack_unit: 'kg' };
+    await expectError(
+      t.rpc(t.users.chef, 'upsert_packaging_spec', { p: { ...base, pack_qty: 5 } }),
+      '已經有報價，不能修改包裝數量或單位',
+    );
+    await expectError(
+      t.rpc(t.users.chef, 'upsert_packaging_spec', { p: { ...base, pack_unit: '台斤' } }),
+      '已經有報價，不能修改包裝數量或單位',
+    );
+    await t.rpc(t.users.chef, 'upsert_packaging_spec', { p: { ...base, spec_name: '一箱 3 kg' } });
+    // 報價全部作廢後就可以改
+    const [price] = await t.sql<{ id: string }>('select id from app.purchase_prices where packaging_spec_id = $1', [ing.specId]);
+    await t.rpc(t.users.founder, 'void_purchase_price', { p_id: price.id, p_reason: '規格打錯' });
+    await t.rpc(t.users.chef, 'upsert_packaging_spec', { p: { ...base, pack_qty: 5 } });
+  });
+});

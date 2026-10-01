@@ -11,8 +11,9 @@
 - 已完成：資料庫（migrations、RPC、凍結與稽核 trigger）、計算核心、所有 MVP 頁面、示範模式、基準版菜單匯入腳本
 - repo：**公開**的 https://github.com/greedydavis/recipe-system （使用者選擇公開原始碼）。推送 `main` 會觸發 `.github/workflows/deploy.yml`：先跑測試；repo 變數 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY` 都設定後，才會部署到 https://greedydavis.github.io/recipe-system/
 - 公開前把歷史壓成單一 commit；清理前的舊歷史只保留在本機標籤 `local/history-before-public`，**不要推送 tags**
-- 尚未完成：建立 Supabase 正式專案與創辦人帳號（使用者操作）、設定 repo 變數、Playwright E2E、真實單價與克重回填、UAT
-- 常用指令：`npm run dev`（本機，自動使用示範資料庫）、`npm test`、`npm run typecheck`、`npm run build`、`npm run db:bundle`、`npm run seed:baseline`
+- 尚未完成：Playwright E2E、真實單價與克重回填、UAT
+- 常用指令：`npm run dev`（本機，自動使用示範資料庫）、`npm test`、`npm run typecheck`、`npm run build`、`npm run db:bundle`（全新安裝）、`npm run db:bundle -- --from <版本>`（已上線專案的升級檔）、`npm run seed:baseline`
+- **上線的資料庫要由使用者在 Supabase SQL Editor 手動執行 migration。** 推送需要新 migration 的前端之前，先確認使用者已執行；網站會用 `public.schema_version()` 比對，資料庫落後時頂端出現紅色提醒
 
 ---
 
@@ -95,7 +96,7 @@ POS 串接；向供應商下單與採購流程；排班、薪資、會計；外�
 - **有效單價**：生效日 ≤ 計算日期、而且沒有作廢的單價裡，生效日最新的一筆。未來才生效的價格不能拿來算今天的成本。
 - **單價 0 元**算「有價格」（例如水）。**沒有價格**或**無法換算單位**時，成本標示「不完整」，列出原因，也**不顯示**食材毛利率和建議售價。絕對不能把缺少的值當成 0，也不能自己猜換算比例。
 - 金額與數量一律用 `decimal.js` 或 Postgres `numeric` 計算，禁止用 JS 浮點數直接相乘或相加。
-- `src/domain/` 是前端即時計算與顯示的實作；**定版快照另由 Postgres `app.server_cost_snapshot()` 以同一組規則重算，且不得採信瀏覽器送來的成本數字。** 修改任一邊時，都要補對照測試（至少涵蓋單位、損耗、元件與售價）。
+- `src/domain/` 是前端即時計算與顯示的實作；**定版快照另由 Postgres `app.server_cost_snapshot()` 以同一組規則重算，且不得採信瀏覽器送來的成本數字。** 引用的元件也依計算日的單價即時重算（和前端相同），不取元件定版當時的快照。修改任一邊時，都要補對照測試（至少涵蓋單位、損耗、元件與售價；`db-tests/integration.test.ts` 用黃金範例比對兩邊）。
 - **計算過程中不四捨五入**，只在顯示時處理：
   - 用量：`g`、`ml` 小於 10 顯示到小數 1 位，10 以上顯示整數；計數單位顯示到小數 1 位
   - 單位成本顯示到小數 4 位；行成本 2 位；每份成本 1 位；批次成本顯示整數
@@ -138,7 +139,7 @@ POS 串接；向供應商下單與採購流程；排班、薪資、會計；外�
 10. 狀態只能透過 RPC `transition_version` 變更；每次變更都要寫入 `version_status_history`（操作者、時間、意見）。
 11. 草案要用交易式 RPC `save_version_draft` 一次存完，並用 `revision` 做樂觀鎖；有衝突時提示重新載入，不能默默覆蓋。
 12. 售價不跟著版本走：售價存在 `menu_prices`（有歷史紀錄）。成本會用現行價格即時計算；**定版時另外寫入 `cost_snapshots`**，內容包含當時用到的價格 id 與逐行明細。
-13. 試做項目只能掛在試菜中、待核准或已定版的版本上。評分者可以修改自己的評分，直到該版本定版或停用為止。
+13. 試做項目只能掛在試菜中、待核准或已定版的版本上（已定版可以當對照組）。**評分只在「試菜中」「待核准」時可以新增、修改或刪除**；定版或停用後一律唯讀（DB trigger 強制），已定版的對照組不收評分，也不出現在測試人員的待辦。
 
 ---
 
@@ -147,7 +148,7 @@ POS 串接；向供應商下單與採購流程；排班、薪資、會計；外�
 - 所有業務資料表都要掛上共用的 audit trigger。每次新增、修改、刪除都寫入 `audit_logs`，內容包含操作者、時間、資料表、紀錄 id、修改前後的 jsonb、有變動的欄位。
 - `audit_logs` 只能新增。任何角色（包含創辦人）都不能透過 API 修改或刪除。
 - **新增資料表時，一定要同時**：放在 `app` schema、啟用 RLS、掛上 audit trigger（0002 的迴圈只會處理當時已存在的表，之後新增的表要自己掛）；如果是版本內容表，還要掛凍結 trigger；並用 RPC 提供存取。
-- **新增或修改 RPC 的 migration，結尾一定要重跑 `20260916000006_grants.sql` 的權限區塊**。Supabase 預設會把新函式開放給 `anon`，不重跑就會漏權限。
+- **每個 migration 的最後一行都是 `select app.finish_migration('<14 位數版本號>');`**：重跑權限設定（收回 anon、只開放 authenticated）並把版本寫入 `app.schema_migrations`。Supabase 預設會把新函式開放給 `anon`，漏了就會漏權限（0011 曾經發生）。`db-tests/migrations.test.ts` 會檢查這一行，測試環境也模擬了 Supabase 的預設權限。
 
 ---
 
@@ -161,13 +162,15 @@ POS 串接；向供應商下單與採購流程；排班、薪資、會計；外�
   - `supabase/local/auth_shim.sql` 只給 PGlite 用，模擬 Supabase 的 `auth.uid()`、`anon`、`authenticated`
 - 前端成本計算流程：`get_costing_bundle` 取回版本、巢狀元件與原物料單價 → `src/domain/costing.ts` 計算，供畫面即時預覽。**定版快照必須由資料庫 `app.server_cost_snapshot()` 依資料庫當下資料重算；`transition_version` 不信任或採用瀏覽器傳入的成本數字。**
 - 照片：上傳前在瀏覽器壓縮（最長邊 1600px、WebP），並移除 EXIF（包含 GPS）；用 signed URL 讀取。Storage policy 在 `supabase/storage.sql`。
+- 資料庫版本：`vite.config.ts` 在建置時把最新 migration 編號帶入 `__SCHEMA_VERSION__`；Supabase 模式登入後和 `schema_version()` 比對，資料庫落後就顯示提醒。
+- 百分比欄位（損耗率、目標成本率、稅率）用 `src/app/format.ts` 的 `rateToPercentInput`／`percentInputToRate` 換算，不要直接 `* 100`、`/ 100`。
 - 時區 `Asia/Taipei`；幣別新台幣
 - 目錄分工：
   - `src/domain/`：純計算與狀態機，**不能 import React 或 Supabase**
   - `src/data/`：後端介面、RPC 呼叫、回傳型別、示範資料、基準版匯入
   - `src/pages/`：各功能頁面；`src/components/`：共用元件；`src/app/`：路由外框、登入狀態、格式化
   - `src/i18n/labels.ts`：所有 enum 的中文標籤集中在這裡
-  - `db-tests/`：在 PGlite 上跑的資料庫測試；`scripts/`：SQL 合併、基準版菜單轉檔
+  - `db-tests/`：在 PGlite 上跑的資料庫測試（`vite.config.ts` 限制同時 2 個程序，PGlite 很吃記憶體）；`scripts/`：SQL 合併、基準版菜單轉檔
 
 ---
 

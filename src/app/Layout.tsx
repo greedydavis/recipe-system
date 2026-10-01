@@ -2,6 +2,8 @@ import { BookOpen, ClipboardCheck, Home, Menu, Package } from 'lucide-react';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { cx } from '../components/ui';
+import { useRpc } from '../data/api';
+import type { RpcError } from '../data/backend';
 import type { Role } from '../domain/types';
 import { ROLE_LABEL } from '../i18n/labels';
 import { useAuth } from './auth';
@@ -20,6 +22,7 @@ export function Layout() {
 
   return (
     <div className="min-h-dvh md:pl-60">
+      <SchemaNotice />
       {backend?.mode === 'demo' && (
         <div className="no-print bg-amber-100 px-4 py-1.5 text-center text-xs text-amber-900">
           示範模式：資料只存在這台裝置的瀏覽器
@@ -74,6 +77,29 @@ export function Layout() {
           ))}
         </div>
       </nav>
+    </div>
+  );
+}
+
+/**
+ * 網站比資料庫新的時候提醒（例如推送了需要新 migration 的版本，但 SQL 還沒在 Supabase 執行）。
+ * 示範模式每次都用最新的 migrations，不需要檢查。
+ */
+function SchemaNotice() {
+  const { backend, me } = useAuth();
+  const enabled = backend?.mode === 'supabase';
+  const version = useRpc<string | null>('schema_version', {}, { enabled, staleTime: 10 * 60_000, retry: false });
+  if (!enabled || version.isLoading) return null;
+  // PGRST202：資料庫還沒有這個函式，代表連 0012 都還沒執行；其他錯誤（例如斷線）不在這裡提示
+  const missing = (version.error as RpcError | null)?.code === 'PGRST202';
+  if (version.error && !missing) return null;
+  const current = missing ? null : (version.data ?? null);
+  if (current && current >= __SCHEMA_VERSION__) return null;
+  return (
+    <div className="no-print bg-red-100 px-4 py-2 text-center text-sm text-red-900" role="alert">
+      {me?.role === 'founder'
+        ? `資料庫還沒更新到這一版網站需要的版本（需要 ${__SCHEMA_VERSION__}，目前 ${current ?? '更早的版本'}）。請到 Supabase → SQL Editor 執行 supabase/migrations 裡還沒執行的檔案；更新前部分功能可能會出錯。`
+        : '系統正在更新，部分功能可能暫時無法使用；請通知創辦人。'}
     </div>
   );
 }
