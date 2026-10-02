@@ -692,7 +692,14 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
         )}
       </div>
 
-      <PhotoStrip photos={item.photos} target={{ tasting_item_id: item.id }} canAdd canDelete={role === 'founder'} emptyText="還沒有試做照片" />
+      {/* 和資料庫 delete_photo 一致：創辦人可以刪全部，主廚與店長只能刪自己上傳的 */}
+      <PhotoStrip
+        photos={item.photos}
+        target={{ tasting_item_id: item.id }}
+        canAdd
+        canDelete={(p) => role === 'founder' || ((role === 'chef' || role === 'manager') && p.created_by === me.id)}
+        emptyText="還沒有試做照片"
+      />
 
       {editing ? (
         <div className="space-y-2">

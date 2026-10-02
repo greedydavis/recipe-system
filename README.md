@@ -39,6 +39,7 @@ npm run seed:baseline
 ```bash
 npm run typecheck
 npm test
+npm run test:e2e   # 第一次先執行 npx playwright install chromium
 ```
 
 `npm test` 包含：

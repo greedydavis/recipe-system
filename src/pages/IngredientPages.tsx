@@ -468,7 +468,7 @@ function SpecSheet({ ingredient, spec, onClose }: { ingredient: IngredientDetail
         pack_unit: unit,
         supplier_id: supplier,
         is_default: isDefault,
-        is_active: active,
+        is_active: active || isDefault,
         note,
       },
     }),
@@ -520,7 +520,14 @@ function SpecSheet({ ingredient, spec, onClose }: { ingredient: IngredientDetail
         )}
       </Field>
       <Checkbox checked={isDefault} onChange={setIsDefault} label="設為預設規格（計算成本使用）" />
-      {spec && <Checkbox checked={active} onChange={setActive} label="啟用中" />}
+      {spec && (
+        <Checkbox
+          checked={active || isDefault}
+          onChange={setActive}
+          disabled={isDefault}
+          label={isDefault ? '啟用中（預設規格不能停用，要停用請先把別的規格設為預設）' : '啟用中'}
+        />
+      )}
       <Field label="備註">{(id) => <Input id={id} value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
     </Sheet>
   );

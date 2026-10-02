@@ -680,3 +680,15 @@ describe('全系統校正（2026-10-02）', () => {
     await t.rpc(t.users.chef, 'upsert_packaging_spec', { p: { ...base, pack_qty: 5 } });
   });
 });
+
+describe('預設包裝規格', () => {
+  it('預設規格不能停用；把別的規格設為預設後就可以', async () => {
+    const ing = await createIngredient(t, { name: '預設規格測試鹽', packQty: 1, packUnit: 'kg', price: 30 });
+    const base = { id: ing.specId, ingredient_id: ing.id, spec_name: '1 kg', pack_qty: 1, pack_unit: 'kg' };
+    await expectError(t.rpc(t.users.chef, 'upsert_packaging_spec', { p: { ...base, is_active: false } }), '預設規格不能停用');
+    await t.rpc(t.users.chef, 'upsert_packaging_spec', {
+      p: { ingredient_id: ing.id, spec_name: '3 kg', pack_qty: 3, pack_unit: 'kg', is_default: true },
+    });
+    await t.rpc(t.users.chef, 'upsert_packaging_spec', { p: { ...base, is_active: false } });
+  });
+});

@@ -9,3 +9,5 @@ private/
 supabase/setup-all.sql
 *.tsbuildinfo
 supabase/upgrade.sql
+test-results/
+playwright-report/

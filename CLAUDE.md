@@ -11,8 +11,8 @@
 - 已完成：資料庫（migrations、RPC、凍結與稽核 trigger）、計算核心、所有 MVP 頁面、示範模式、基準版菜單匯入腳本
 - repo：**公開**的 https://github.com/greedydavis/recipe-system （使用者選擇公開原始碼）。推送 `main` 會觸發 `.github/workflows/deploy.yml`：先跑測試；repo 變數 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY` 都設定後，才會部署到 https://greedydavis.github.io/recipe-system/
 - 公開前把歷史壓成單一 commit；清理前的舊歷史只保留在本機標籤 `local/history-before-public`，**不要推送 tags**
-- 尚未完成：Playwright E2E、真實單價與克重回填、UAT
-- 常用指令：`npm run dev`（本機，自動使用示範資料庫）、`npm test`、`npm run typecheck`、`npm run build`、`npm run db:bundle`（全新安裝）、`npm run db:bundle -- --from <版本>`（已上線專案的升級檔）、`npm run seed:baseline`
+- 尚未完成：真實單價與克重回填、UAT
+- 常用指令：`npm run dev`（本機，自動使用示範資料庫）、`npm test`、`npm run typecheck`、`npm run build`、`npm run db:bundle`（全新安裝）、`npm run db:bundle -- --from <版本>`（已上線專案的升級檔）、`npm run seed:baseline`、`npm run test:e2e`（Playwright）
 - **上線的資料庫要由使用者在 Supabase SQL Editor 手動執行 migration。** 推送需要新 migration 的前端之前，先確認使用者已執行；網站會用 `public.schema_version()` 比對，資料庫落後時頂端出現紅色提醒
 
 ---
@@ -180,8 +180,8 @@ POS 串接；向供應商下單與採購流程；排班、薪資、會計；外�
 - **黃金範例**：`src/domain/__fixtures__/golden/` 放手算的完整食譜（原物料 → 元件 → 菜品），逐行比對，比較到小數 10 位必須完全相同（循環小數無法用有限位數表示）。要改期望值，必須先取得使用者同意，並在 commit 說明原因。
 - **計算相關的 bug，先補一個會失敗的測試，再修正。**
 - **資料庫測試在 PGlite 上跑**（`db-tests/`，不需要 Docker）：每個 RPC 都要測各角色能不能呼叫；凍結 trigger、狀態轉移、audit trigger、唯一約束、照片權限函式也都要測。`db-tests/integration.test.ts` 會比對資料庫的單位表與狀態轉移表是否和 `src/domain` 一致。
-- 主要流程要有 Playwright E2E（手機視窗 390×844、zh-TW）：建立菜品並試菜、核准定版、修改已定版食譜、更新原物料價格、內場查看與列印標準卡、測試人員評分。**目前尚未建立**，改畫面流程時先用瀏覽器實際操作驗證，並告訴使用者 E2E 還沒補。
-- 說「完成」之前，要先跑 `npm run typecheck` 與 `npm test`（含計算核心與資料庫測試）；有改畫面就在瀏覽器實際操作一次。沒跑的項目要明確告訴使用者。
+- 主要流程有 Playwright E2E（`e2e/`，手機視窗 390×844、zh-TW，跑在示範模式）：建立菜品並試菜、核准定版、修改已定版食譜、更新原物料價格、內場查看與列印標準卡、測試人員評分。CI 要 E2E 通過才部署。改畫面流程時要同步更新 E2E，並在瀏覽器實際操作一次。
+- 說「完成」之前，要先跑 `npm run typecheck`、`npm test`（含計算核心與資料庫測試）與 `npm run test:e2e`；有改畫面就在瀏覽器實際操作一次。沒跑的項目要明確告訴使用者。
 - **禁止為了讓測試通過而放寬權限檢查、凍結 trigger 或黃金範例的期望值。**
 
 ---
