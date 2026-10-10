@@ -1,0 +1,9 @@
+[project]
+name = "screenshot-bot"
+version = "0.1.0"
+description = "截圖收藏與每週 briefing Telegram 機器人"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
