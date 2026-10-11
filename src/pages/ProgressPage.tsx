@@ -1,12 +1,8 @@
 import { AlertTriangle, ChevronRight } from 'lucide-react';
-import { useMemo } from 'react';
 import { Link } from 'react-router';
-import { useCosts } from '../app/costing';
-import { RequireRole } from '../app/Layout';
-import { type BlockerGroup, type CategoryProgress, type CostRow, currentVersions, summarizeProgress } from '../app/progress';
+import type { BlockerGroup, CategoryProgress, CostRow } from '../app/progress';
+import { useProgress } from '../app/useProgress';
 import { Badge, Card, ErrorState, Loading, Notice, PageHeader, Section, StatusBadge, cx } from '../components/ui';
-import { useRpc } from '../data/api';
-import type { Dashboard, RecipeListItem } from '../data/types';
 import { formatPercent, formatPrice, formatServingCost } from '../domain/format';
 import type { VersionStatus } from '../domain/types';
 import { STATUS_LABEL } from '../i18n/labels';
@@ -22,33 +18,6 @@ const BAR_COLOR: Record<VersionStatus, string> = {
 const STAGES: VersionStatus[] = ['locked', 'pending_approval', 'testing', 'draft', 'retired'];
 
 export function ProgressPage() {
-  return (
-    <RequireRole roles={['founder', 'chef', 'manager']}>
-      <Progress />
-    </RequireRole>
-  );
-}
-
-/** 進度、卡關與成本總覽都由現有 RPC 的資料算出來，不需要額外的資料庫查詢 */
-export function useProgress() {
-  const recipes = useRpc<RecipeListItem[]>('list_recipes', { p_type: null, p_q: null, p_include_archived: false });
-  const dashboard = useRpc<Dashboard>('get_dashboard');
-  const versionIds = useMemo(() => currentVersions(recipes.data ?? []).map((c) => c.versionId), [recipes.data]);
-  const costs = useCosts(versionIds);
-  const summary = useMemo(
-    () => summarizeProgress(recipes.data ?? [], costs.views, dashboard.data),
-    [recipes.data, costs.views, dashboard.data],
-  );
-  return {
-    summary,
-    isLoading: recipes.isLoading || dashboard.isLoading,
-    costsLoading: costs.isLoading,
-    error: recipes.error ?? dashboard.error ?? costs.error,
-    hasRecipes: (recipes.data ?? []).length > 0,
-  };
-}
-
-function Progress() {
   const { summary, isLoading, costsLoading, error, hasRecipes } = useProgress();
 
   if (isLoading) return <Loading />;

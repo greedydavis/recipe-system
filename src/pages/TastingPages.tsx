@@ -3,8 +3,8 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { can, useMe, useRole } from '../app/auth';
 import { formatDate, formatScore, formatSigned, todayIso } from '../app/format';
-import { RequireRole } from '../app/Layout';
 import { PhotoStrip } from '../components/photos';
+import { VersionPicker } from '../components/VersionPicker';
 import {
   Badge,
   BottomBar,
@@ -20,7 +20,6 @@ import {
   Loading,
   Notice,
   PageHeader,
-  SearchInput,
   Section,
   Select,
   Sheet,
@@ -33,14 +32,12 @@ import { rpc, useAction, useRpc } from '../data/api';
 import type {
   Feedback,
   MyTastingTask,
-  RecipeDetail,
-  RecipeListItem,
   TastingItemDetail,
   TastingSessionDetail,
   TastingSessionListItem,
   TeamMember,
 } from '../data/types';
-import { canReceiveFeedback, isReferenceable } from '../domain/status';
+import { canReceiveFeedback } from '../domain/status';
 import { DECISION_LABEL, DECISION_TONE, MENU_READY_LABEL, OILINESS_LABELS, ROLE_LABEL, SALTINESS_LABELS } from '../i18n/labels';
 
 // ───────────────────────── 列表 ─────────────────────────
@@ -69,18 +66,7 @@ export function TastingsPage() {
         {tasks.data && tasks.data.length === 0 && <EmptyState title="目前沒有指派給你的試吃項目" />}
         <div className="space-y-2">
           {tasks.data?.map((t) => (
-            <Link key={t.item_id} to={`/tasting-items/${t.item_id}/feedback`} className="block">
-              <Card className="flex items-center gap-3 hover:bg-brand-50">
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold">{t.display_name}</div>
-                  <div className="text-sm text-muted">
-                    {formatDate(t.tasted_on)}・{t.session_title || '試菜'}
-                  </div>
-                </div>
-                {t.my_feedback ? <Badge tone="ok">已評 {t.my_feedback.score_overall} 分</Badge> : <Badge tone="warn">待評分</Badge>}
-                <ChevronRight className="size-5 text-stone-400" aria-hidden />
-              </Card>
-            </Link>
+            <TastingTaskCard key={t.item_id} task={t} />
           ))}
         </div>
       </Section>
@@ -118,6 +104,24 @@ export function TastingsPage() {
         </Section>
       )}
     </div>
+  );
+}
+
+/** 指派給我的一筆試吃評分（首頁與試菜頁共用） */
+export function TastingTaskCard({ task }: { task: MyTastingTask }) {
+  return (
+    <Link to={`/tasting-items/${task.item_id}/feedback`} className="block">
+      <Card className="flex items-center gap-3 hover:bg-brand-50">
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold">{task.display_name}</div>
+          <div className="text-sm text-muted">
+            {formatDate(task.tasted_on)}・{task.session_title || '試菜'}
+          </div>
+        </div>
+        {task.my_feedback ? <Badge tone="ok">已評 {task.my_feedback.score_overall} 分</Badge> : <Badge tone="warn">待評分</Badge>}
+        <ChevronRight className="size-5 text-stone-400" aria-hidden />
+      </Card>
+    </Link>
   );
 }
 
@@ -213,14 +217,6 @@ function ItemAssignmentFields({
 }
 
 export function TastingNewPage() {
-  return (
-    <RequireRole roles={['founder', 'chef', 'manager']}>
-      <TastingNew />
-    </RequireRole>
-  );
-}
-
-function TastingNew() {
   const navigate = useNavigate();
   const toast = useToast();
   const me = useMe();
@@ -306,7 +302,6 @@ function TastingNew() {
                 toast('已建立試菜場次');
                 navigate(`/tastings/${id}`, { replace: true });
               },
-              onError: (e) => toast(e.message, 'danger'),
             })
           }
         >
@@ -316,8 +311,10 @@ function TastingNew() {
 
       {picking && (
         <VersionPicker
+          title="選擇菜品或元件"
+          hint="草案內容還會變動，必須先「送試菜」才能試做。已定版的版本可以放進來當對照，但不收評分。"
           onClose={() => setPicking(false)}
-          exclude={items.map((i) => i.version_id)}
+          excludeVersionIds={items.map((i) => i.version_id)}
           onPick={(recipe, version) => {
             const testerIds = testers.map((t) => t.id);
             setItems([
@@ -340,75 +337,9 @@ function TastingNew() {
   );
 }
 
-function VersionPicker({
-  onClose,
-  onPick,
-  exclude,
-}: {
-  onClose: () => void;
-  onPick: (recipe: RecipeDetail, version: RecipeDetail['versions'][number]) => void;
-  exclude: string[];
-}) {
-  const [q, setQ] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
-  const list = useRpc<RecipeListItem[]>('list_recipes', { p_type: null, p_q: null, p_include_archived: false });
-  const detail = useRpc<RecipeDetail>('get_recipe', { p_id: selected }, { enabled: !!selected });
-  const matches = (list.data ?? []).filter((r) => !q.trim() || r.name.includes(q.trim()));
-
-  return (
-    <Sheet open onClose={onClose} title={selected ? '選擇版本' : '選擇菜品或元件'}>
-      {!selected ? (
-        <>
-          <SearchInput value={q} onChange={setQ} placeholder="搜尋名稱" />
-          <div className="divide-y divide-line">
-            {matches.map((r) => (
-              <button key={r.id} type="button" onClick={() => setSelected(r.id)} className="flex min-h-12 w-full items-center gap-2 py-2 text-left hover:bg-brand-50">
-                <span className="flex-1">{r.name}</span>
-                <span className="text-xs text-muted">{r.type === 'dish' ? '菜品' : '元件'}</span>
-                <StatusBadge status={r.locked ? 'locked' : r.latest.status} />
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          <Button small variant="ghost" onClick={() => setSelected(null)}>
-            ← 回到清單
-          </Button>
-          {detail.isLoading && <Loading />}
-          <p className="text-sm text-muted">草案內容還會變動，必須先「送試菜」才能試做。已定版的版本可以放進來當對照，但不收評分。</p>
-          <div className="space-y-2">
-            {detail.data?.versions.map((ver) => (
-              <button
-                key={ver.id}
-                type="button"
-                disabled={!isReferenceable(ver.status) || exclude.includes(ver.id)}
-                onClick={() => onPick(detail.data!, ver)}
-                className="flex min-h-12 w-full items-center gap-2 rounded-xl px-3 py-2 text-left ring-1 ring-line hover:bg-brand-50 disabled:opacity-50"
-              >
-                <span className="font-semibold">v{ver.version_no}</span>
-                <span className="flex-1 truncate text-sm">{ver.title}</span>
-                <StatusBadge status={ver.status} />
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </Sheet>
-  );
-}
-
 // ───────────────────────── 場次詳情 ─────────────────────────
 
 export function TastingSessionPage() {
-  return (
-    <RequireRole roles={['founder', 'chef', 'manager']}>
-      <TastingSession />
-    </RequireRole>
-  );
-}
-
-function TastingSession() {
   const { id = '' } = useParams();
   const me = useMe();
   const toast = useToast();
@@ -452,7 +383,9 @@ function TastingSession() {
 
       {picking && (
         <VersionPicker
-          exclude={s.items.map((i) => i.version_id)}
+          title="選擇菜品或元件"
+          hint="草案內容還會變動，必須先「送試菜」才能試做。已定版的版本可以放進來當對照，但不收評分。"
+          excludeVersionIds={s.items.map((i) => i.version_id)}
           onClose={() => setPicking(false)}
           onPick={(recipe, version) => {
             setPicking(false);
@@ -494,7 +427,6 @@ function TastingSession() {
                         toast('已加入試做項目');
                         setPending(null);
                       },
-                      onError: (e) => toast(e.message, 'danger'),
                     },
                   )
                 }
@@ -557,7 +489,6 @@ function SessionSummary({ session }: { session: TastingSessionDetail }) {
                     toast('已儲存試菜總結');
                     setEditing(false);
                   },
-                  onError: (e) => toast(e.message, 'danger'),
                 })
               }
             >
@@ -618,8 +549,6 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
   const me = useMe();
   const toast = useToast();
   const navigate = useNavigate();
-  const [editing, setEditing] = useState(false);
-  const [deviation, setDeviation] = useState(item.deviation_note);
   const [proxy, setProxy] = useState(false);
   const [assignment, setAssignment] = useState<ItemAssignment | null>(null);
 
@@ -630,16 +559,9 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
     assigned_tester_ids: item.assigned_testers.map((t) => t.id),
   });
 
-  const [conclusion, setConclusion] = useState(item.conclusion);
-  const [editingConclusion, setEditingConclusion] = useState(false);
-
-  const saveDeviation = useAction(() => rpc('update_tasting_item', { p_id: item.id, p: { deviation_note: deviation } }));
-  const saveConclusion = useAction((p: { conclusion?: string; decision?: string | null }) =>
-    rpc('update_tasting_item', { p_id: item.id, p }),
-  );
-  const saveAssignment = useAction((value: ItemAssignment) =>
-    rpc('update_tasting_item', { p_id: item.id, p: assignmentPayload(value) }),
-  );
+  const update = (p: Record<string, unknown>) => rpc('update_tasting_item', { p_id: item.id, p });
+  const saveDecision = useAction((decision: string | null) => update({ decision }));
+  const saveAssignment = useAction((value: ItemAssignment) => update(assignmentPayload(value)));
   const removeItem = useAction(() => rpc('delete_tasting_item', { p_id: item.id }));
   const newVersion = useAction(() => {
     const issues = item.feedback.map((f) => f.issues).filter(Boolean);
@@ -683,7 +605,7 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
             loading={removeItem.isPending}
             onClick={() => {
               if (!confirm(`從這個場次移除「${item.recipe_name} v${item.version_no}」？`)) return;
-              removeItem.mutate(undefined, { onSuccess: () => toast('已移除試做項目'), onError: (e) => toast(e.message, 'danger') });
+              removeItem.mutate(undefined, { onSuccess: () => toast('已移除試做項目') });
             }}
           >
             <Trash2 className="size-4" aria-hidden />
@@ -701,32 +623,13 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
         emptyText="還沒有試做照片"
       />
 
-      {editing ? (
-        <div className="space-y-2">
-          <Textarea aria-label="實際做法偏差" value={deviation} onChange={(e) => setDeviation(e.target.value)} placeholder="例如：火力不足，多煮 5 分鐘；少放 2 g 鹽" />
-          <div className="flex gap-2">
-            <Button small variant="secondary" onClick={() => setEditing(false)}>
-              取消
-            </Button>
-            <Button
-              small
-              loading={saveDeviation.isPending}
-              onClick={() => saveDeviation.mutate(undefined, { onSuccess: () => (setEditing(false), toast('已儲存')), onError: (e) => toast(e.message, 'danger') })}
-            >
-              儲存
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => (setDeviation(item.deviation_note), setEditing(true))}
-          className="block min-h-11 w-full rounded-xl bg-stone-50 px-3 py-2 text-left text-sm hover:bg-stone-100"
-        >
-          <span className="font-medium">實際做法偏差：</span>
-          {item.deviation_note || <span className="text-muted">（點此記錄）</span>}
-        </button>
-      )}
+      <InlineNote
+        label="實際做法偏差"
+        value={item.deviation_note}
+        placeholder="例如：火力不足，多煮 5 分鐘；少放 2 g 鹽"
+        className="rounded-xl bg-stone-50 hover:bg-stone-100"
+        onSave={(text) => update({ deviation_note: text })}
+      />
 
       <div className="flex flex-wrap gap-3 text-sm tabular-nums">
         <span>
@@ -754,56 +657,17 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
           value={item.decision}
           allowClear
           onChange={(v) =>
-            saveConclusion.mutate(
-              { decision: v },
-              { onSuccess: () => toast(v ? `已記錄：${DECISION_LABEL[v]}` : '已清除決議'), onError: (e) => toast(e.message, 'danger') },
-            )
+            saveDecision.mutate(v, { onSuccess: () => toast(v ? `已記錄：${DECISION_LABEL[v]}` : '已清除決議') })
           }
           options={Object.entries(DECISION_LABEL).map(([value, label]) => ({ value, label }))}
         />
-        {editingConclusion ? (
-          <div className="space-y-2">
-            <Textarea
-              aria-label="結論與調整方向"
-              rows={3}
-              value={conclusion}
-              onChange={(e) => setConclusion(e.target.value)}
-              placeholder="例如：大骨增量 10%、鹽減 1 g，下一輪再比一次"
-            />
-            <div className="flex gap-2">
-              <Button small variant="secondary" onClick={() => (setConclusion(item.conclusion), setEditingConclusion(false))}>
-                取消
-              </Button>
-              <Button
-                small
-                loading={saveConclusion.isPending}
-                onClick={() =>
-                  saveConclusion.mutate(
-                    { conclusion },
-                    {
-                      onSuccess: () => {
-                        toast('已儲存結論');
-                        setEditingConclusion(false);
-                      },
-                      onError: (e) => toast(e.message, 'danger'),
-                    },
-                  )
-                }
-              >
-                儲存
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => (setConclusion(item.conclusion), setEditingConclusion(true))}
-            className="block min-h-11 w-full rounded-lg bg-white px-3 py-2 text-left text-sm hover:bg-white/70"
-          >
-            <span className="font-medium">結論與調整方向：</span>
-            {item.conclusion || <span className="text-muted">（點此記錄）</span>}
-          </button>
-        )}
+        <InlineNote
+          label="結論與調整方向"
+          value={item.conclusion}
+          placeholder="例如：大骨增量 10%、鹽減 1 g，下一輪再比一次"
+          className="rounded-lg bg-white hover:bg-white/70"
+          onSave={(text) => update({ conclusion: text })}
+        />
       </div>
 
       {!scorable && (
@@ -833,7 +697,6 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
                   toast('已依回饋建立新草案');
                   navigate(`/versions/${newId}/edit`);
                 },
-                onError: (e) => toast(e.message, 'danger'),
               })
             }
           >
@@ -862,7 +725,6 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
                       toast('已更新指派');
                       setAssignment(null);
                     },
-                    onError: (e) => toast(e.message, 'danger'),
                   })
                 }
               >
@@ -875,6 +737,48 @@ function TastingItemCard({ item, team }: { item: TastingItemDetail; team: TeamMe
         </Sheet>
       )}
     </Card>
+  );
+}
+
+/** 點一下就能編輯的一段文字（實際做法偏差、結論與調整方向） */
+function InlineNote({
+  label,
+  value,
+  placeholder,
+  className,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  className: string;
+  onSave: (text: string) => Promise<unknown>;
+}) {
+  const toast = useToast();
+  // null 代表沒有在編輯
+  const [draft, setDraft] = useState<string | null>(null);
+  const save = useAction(onSave);
+
+  if (draft === null) {
+    return (
+      <button type="button" onClick={() => setDraft(value)} className={cx('block min-h-11 w-full px-3 py-2 text-left text-sm', className)}>
+        <span className="font-medium">{label}：</span>
+        {value || <span className="text-muted">（點此記錄）</span>}
+      </button>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <Textarea aria-label={label} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={placeholder} />
+      <div className="flex gap-2">
+        <Button small variant="secondary" onClick={() => setDraft(null)}>
+          取消
+        </Button>
+        <Button small loading={save.isPending} onClick={() => save.mutate(draft, { onSuccess: () => (setDraft(null), toast('已儲存')) })}>
+          儲存
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -912,7 +816,7 @@ function ProxyFeedbackSheet({ itemId, onClose }: { itemId: string; onClose: () =
           block
           loading={submit.isPending}
           disabled={!name.trim() || !form.score_overall}
-          onClick={() => submit.mutate(undefined, { onSuccess: () => (toast('已送出評分'), onClose()), onError: (e) => toast(e.message, 'danger') })}
+          onClick={() => submit.mutate(undefined, { onSuccess: () => (toast('已送出評分'), onClose()) })}
         >
           送出
         </Button>
@@ -1079,7 +983,6 @@ export function FeedbackPage() {
                   toast('已送出評分，謝謝！');
                   navigate('/tastings');
                 },
-                onError: (e) => toast(e.message, 'danger'),
               })
             }
           >

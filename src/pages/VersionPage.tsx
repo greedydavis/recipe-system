@@ -2,7 +2,6 @@ import { AlertTriangle, Copy, FileText, GitCompare, Lock, Pencil, Trash2 } from 
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { can, useRole } from '../app/auth';
-import { RequireRole } from '../app/Layout';
 import { type CostView, useCosts } from '../app/costing';
 import { formatDate, formatDateTime, formatScore, formatSigned, numStr, toNum } from '../app/format';
 import { groupLines } from '../app/lines';
@@ -20,8 +19,8 @@ import {
   Notice,
   NumberInput,
   PageHeader,
+  QtyUnitField,
   Section,
-  Select,
   Sheet,
   StatusBadge,
   Tabs,
@@ -43,19 +42,12 @@ import {
 } from '../domain/format';
 import { type Transition, availableTransitions } from '../domain/status';
 import { dec } from '../domain/decimal';
+import { unitLabel } from '../domain/units';
 import { DECISION_LABEL, DECISION_TONE, HEAT_LABEL, STATUS_LABEL } from '../i18n/labels';
 
 type TabKey = 'lines' | 'steps' | 'cost' | 'tasting' | 'history';
 
 export function VersionPage() {
-  return (
-    <RequireRole roles={['founder', 'chef', 'manager']}>
-      <VersionView />
-    </RequireRole>
-  );
-}
-
-function VersionView() {
   const { id = '' } = useParams();
   const role = useRole();
   const navigate = useNavigate();
@@ -182,7 +174,6 @@ function VersionView() {
                     toast('已複製為新草案');
                     navigate(`/versions/${newId}/edit`);
                   },
-                  onError: (e) => toast(e.message, 'danger'),
                 })
               }
             >
@@ -202,7 +193,6 @@ function VersionView() {
                     toast('已刪除草案');
                     navigate(`/recipes/${v.recipe.id}`);
                   },
-                  onError: (e) => toast(e.message, 'danger'),
                 });
               }}
             >
@@ -304,7 +294,7 @@ function LinesTab({ v }: { v: VersionDetail }) {
                     <Badge tone="warn">用量待填</Badge>
                   ) : (
                     <span className="font-semibold">
-                      {formatQty(dec(l.quantity), l.unit)} {l.unit === 'pc' ? '個' : l.unit}
+                      {formatQty(dec(l.quantity), l.unit)} {unitLabel(l.unit)}
                     </span>
                   )}
                 </div>
@@ -420,11 +410,11 @@ function CostTab({ v, view, loading, error }: { v: VersionDetail; view?: CostVie
                   {l.issues.length > 0 && <div className="text-xs text-amber-800">{l.issues.join('；')}</div>}
                 </td>
                 <td className="px-3 py-2 text-right">
-                  {formatQty(l.quantity, l.unit)} {l.unit === 'pc' ? '個' : l.unit}
+                  {formatQty(l.quantity, l.unit)} {unitLabel(l.unit)}
                 </td>
                 <td className="px-3 py-2 text-right">{l.kind === 'ingredient' ? formatPercent(l.wasteRate) : '—'}</td>
                 <td className="px-3 py-2 text-right">
-                  {formatQty(l.purchaseQty, l.baseUnit)} {l.baseUnit === 'pc' ? '個' : l.baseUnit}
+                  {formatQty(l.purchaseQty, l.baseUnit)} {unitLabel(l.baseUnit)}
                 </td>
                 <td className="px-3 py-2 text-right">{formatUnitCost(l.unitCost)}</td>
                 <td className="px-3 py-2 text-right font-medium">{formatLineCost(l.cost)}</td>
@@ -619,27 +609,6 @@ function YieldSheet({ v, onClose }: { v: VersionDetail; onClose: () => void }) {
     }),
   );
 
-  const qtyField = (
-    label: string,
-    hint: string,
-    value: string,
-    setValue: (v: string) => void,
-    unit: 'g' | 'ml',
-    setUnit: (u: 'g' | 'ml') => void,
-  ) => (
-    <Field label={label} hint={hint}>
-      {(id) => (
-        <div className="flex gap-2">
-          <NumberInput id={id} value={value} onChange={setValue} className="flex-1" />
-          <Select aria-label={`${label}單位`} value={unit} onChange={(e) => setUnit(e.target.value as 'g' | 'ml')} className="w-24">
-            <option value="g">g</option>
-            <option value="ml">ml</option>
-          </Select>
-        </div>
-      )}
-    </Field>
-  );
-
   return (
     <Sheet
       open
@@ -659,7 +628,6 @@ function YieldSheet({ v, onClose }: { v: VersionDetail; onClose: () => void }) {
                   toast('已記錄實際產量');
                   onClose();
                 },
-                onError: (e) => toast(e.message, 'danger'),
               })
             }
           >
@@ -671,15 +639,22 @@ function YieldSheet({ v, onClose }: { v: VersionDetail; onClose: () => void }) {
       <p className="text-sm text-muted">
         產量是試做後量出來的結果，所以「試菜中」還可以記錄。用料、步驟等食譜內容仍然凍結，要改請複製為新版本。
       </p>
-      {!isDish && qtyField('批次產量', '實際過濾或完成後秤到的量', batchQty, setBatchQty, batchUnit, setBatchUnit)}
-      {qtyField(
-        isDish ? '每份克重' : '每份量',
-        isDish ? '出餐時整份秤重' : '一碗或一份實際舀多少',
-        servingQty,
-        setServingQty,
-        servingUnit,
-        setServingUnit,
+      {!isDish && (
+        <QtyUnitField
+          label="批次產量"
+          hint="實際過濾或完成後秤到的量"
+          qty={batchQty}
+          unit={batchUnit}
+          onChange={(qty, unit) => (setBatchQty(qty), setBatchUnit(unit))}
+        />
       )}
+      <QtyUnitField
+        label={isDish ? '每份克重' : '每份量'}
+        hint={isDish ? '出餐時整份秤重' : '一碗或一份實際舀多少'}
+        qty={servingQty}
+        unit={servingUnit}
+        onChange={(qty, unit) => (setServingQty(qty), setServingUnit(unit))}
+      />
       <Field label="成品密度 g/ml（選填）" hint="產量用 ml 記錄、但要算出成率時需要；湯底約 1.0">
         {(id) => <NumberInput id={id} value={density} onChange={setDensity} />}
       </Field>
@@ -744,7 +719,6 @@ function TransitionSheet({
                   toast(`已${transition.label}`);
                   onClose();
                 },
-                onError: (e) => toast(e.message, 'danger'),
               })
             }
           >

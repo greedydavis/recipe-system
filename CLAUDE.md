@@ -164,6 +164,9 @@ POS 串接；向供應商下單與採購流程；排班、薪資、會計；外�
 - 照片：上傳前在瀏覽器壓縮（最長邊 1600px、WebP），並移除 EXIF（包含 GPS）；用 signed URL 讀取。Storage policy 在 `supabase/storage.sql`。
 - 資料庫版本：`vite.config.ts` 在建置時把最新 migration 編號帶入 `__SCHEMA_VERSION__`；Supabase 模式登入後和 `schema_version()` 比對，資料庫落後就顯示提醒。
 - 百分比欄位（損耗率、目標成本率、稅率）用 `src/app/format.ts` 的 `rateToPercentInput`／`percentInputToRate` 換算，不要直接 `* 100`、`/ 100`。
+- 哪個角色能進哪一頁，集中寫在 `src/main.tsx` 路由表的 `guard(...)`；頁面元件不要再自己包 `RequireRole`。
+- 寫入操作一律用 `useAction`（`src/data/api.ts`）：失敗訊息已經統一用提示顯示，呼叫端只寫 `onSuccess`，不要再加 `onError`（會跳兩次）。
+- 共用元件先找再寫：選版本用 `components/VersionPicker.tsx`、數量＋g／ml 用 `QtyUnitField`、單位顯示用 `unitLabel()`（`pc` 顯示成「個」）。
 - 時區 `Asia/Taipei`；幣別新台幣
 - 目錄分工：
   - `src/domain/`：純計算與狀態機，**不能 import React 或 Supabase**

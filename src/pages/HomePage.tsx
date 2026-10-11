@@ -2,14 +2,15 @@ import { AlertTriangle, ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { ProgressSummary } from '../app/progress';
-import { useProgress } from './ProgressPage';
-import { formatDate, formatDateTime } from '../app/format';
+import { useProgress } from '../app/useProgress';
+import { formatDateTime } from '../app/format';
 import { useMe } from '../app/auth';
-import { Badge, Card, EmptyState, ErrorState, Loading, Section, StatusBadge } from '../components/ui';
+import { Card, EmptyState, ErrorState, Loading, Section, StatusBadge } from '../components/ui';
 import { useRpc } from '../data/api';
 import type { Dashboard, MyTastingTask } from '../data/types';
 import { formatPercent } from '../domain/format';
 import { ROLE_LABEL } from '../i18n/labels';
+import { TastingTaskCard } from './TastingPages';
 
 export function HomePage() {
   const me = useMe();
@@ -42,18 +43,7 @@ function MyTasks({ tasks, loading }: { tasks?: MyTastingTask[]; loading: boolean
     <Section title={`我的試吃評分（待填 ${open.length}）`}>
       <div className="space-y-2">
         {[...open, ...done].slice(0, 8).map((t) => (
-          <Link key={t.item_id} to={`/tasting-items/${t.item_id}/feedback`} className="block">
-            <Card className="flex items-center gap-3 hover:bg-brand-50">
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold">{t.display_name}</div>
-                <div className="text-sm text-muted">
-                  {formatDate(t.tasted_on)}・{t.session_title || '試菜'}
-                </div>
-              </div>
-              {t.my_feedback ? <Badge tone="ok">已評 {t.my_feedback.score_overall} 分</Badge> : <Badge tone="warn">待評分</Badge>}
-              <ChevronRight className="size-5 text-stone-400" aria-hidden />
-            </Card>
-          </Link>
+          <TastingTaskCard key={t.item_id} task={t} />
         ))}
       </div>
     </Section>

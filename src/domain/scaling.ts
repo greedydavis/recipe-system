@@ -44,7 +44,3 @@ export function scaleFactor(
     }
   }
 }
-
-export function scaleQty(quantity: Dec | null, factor: Dec): Dec | null {
-  return quantity ? quantity.mul(factor) : null;
-}

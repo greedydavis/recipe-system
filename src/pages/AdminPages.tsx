@@ -4,7 +4,6 @@ import { type ReactNode, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { can, useAuth, useMe } from '../app/auth';
 import { formatDateTime, percentInputToRate, rateToPercentInput, todayIso, toNum } from '../app/format';
-import { RequireRole } from '../app/Layout';
 import {
   Badge,
   Button,
@@ -65,7 +64,7 @@ export function MorePage() {
                   variant="secondary"
                   disabled={name === me.display_name}
                   loading={rename.isPending}
-                  onClick={() => rename.mutate(undefined, { onSuccess: () => toast('已更新名稱'), onError: (e) => toast(e.message, 'danger') })}
+                  onClick={() => rename.mutate(undefined, { onSuccess: () => toast('已更新名稱') })}
                 >
                   儲存
                 </Button>
@@ -110,14 +109,6 @@ export function MorePage() {
 // ───────────────────────── 帳號與角色 ─────────────────────────
 
 export function UsersPage() {
-  return (
-    <RequireRole roles={['founder']}>
-      <Users />
-    </RequireRole>
-  );
-}
-
-function Users() {
   const me = useMe();
   const toast = useToast();
   const profiles = useRpc<Profile[]>('list_profiles');
@@ -149,7 +140,7 @@ function Users() {
                 value={p.role}
                 className="w-40"
                 onChange={(e) =>
-                  assign.mutate({ id: p.id, role: e.target.value as Role }, { onSuccess: () => toast('已更新角色'), onError: (err) => toast(err.message, 'danger') })
+                  assign.mutate({ id: p.id, role: e.target.value as Role }, { onSuccess: () => toast('已更新角色') })
                 }
               >
                 {Object.entries(ROLE_LABEL).map(([k, v]) => (
@@ -165,7 +156,7 @@ function Users() {
                   onClick={() =>
                     setActive.mutate(
                       { id: p.id, active: !p.is_active },
-                      { onSuccess: () => toast(p.is_active ? '已停用' : '已啟用'), onError: (err) => toast(err.message, 'danger') },
+                      { onSuccess: () => toast(p.is_active ? '已停用' : '已啟用') },
                     )
                   }
                 >
@@ -183,14 +174,6 @@ function Users() {
 // ───────────────────────── 系統設定 ─────────────────────────
 
 export function SettingsPage() {
-  return (
-    <RequireRole roles={['founder', 'chef', 'manager']}>
-      <SettingsForm />
-    </RequireRole>
-  );
-}
-
-function SettingsForm() {
   const me = useMe();
   const toast = useToast();
   const settings = useRpc<Settings>('get_settings');
@@ -244,7 +227,7 @@ function SettingsForm() {
                   price_round_to: toNum(values.round as string) ?? 0,
                   require_tasting_before_approval: values.requireTasting,
                 },
-                { onSuccess: () => (setDraft(null), toast('已儲存設定')), onError: (e) => toast(e.message, 'danger') },
+                { onSuccess: () => (setDraft(null), toast('已儲存設定')) },
               )
             }
           >
@@ -259,14 +242,6 @@ function SettingsForm() {
 // ───────────────────────── 操作紀錄 ─────────────────────────
 
 export function AuditPage() {
-  return (
-    <RequireRole roles={['founder', 'chef']}>
-      <Audit />
-    </RequireRole>
-  );
-}
-
-function Audit() {
   const [params] = useSearchParams();
   const [table, setTable] = useState(params.get('table') ?? '');
   const [dateFrom, setDateFrom] = useState('');
@@ -365,14 +340,6 @@ function AuditRow({ log }: { log: AuditLog }) {
 // ───────────────────────── 資料匯出與匯入 ─────────────────────────
 
 export function DataPage() {
-  return (
-    <RequireRole roles={['founder']}>
-      <DataTools />
-    </RequireRole>
-  );
-}
-
-function DataTools() {
   const toast = useToast();
   const client = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);

@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { can, useRole } from '../app/auth';
 import { formatDate, numStr, percentInputToRate, rateToPercentInput, todayIso, toNum } from '../app/format';
-import { RequireRole } from '../app/Layout';
 import {
   Badge,
   Button,
@@ -33,7 +32,7 @@ import { ingredientUnitCost } from '../domain/costing';
 import { dec } from '../domain/decimal';
 import { formatLineCost, formatNumber, formatPercent } from '../domain/format';
 import type { CostingIngredient, Dimension } from '../domain/types';
-import { BASE_UNIT, compatibleUnits } from '../domain/units';
+import { BASE_UNIT, compatibleUnits, unitLabel } from '../domain/units';
 import { DIMENSION_LABEL, INGREDIENT_CATEGORY_LABEL, RECIPE_TYPE_LABEL } from '../i18n/labels';
 
 /** 顯示單價：g／ml 換算成每公斤／每公升比較好讀 */
@@ -48,14 +47,6 @@ function priceDisplay(ing: CostingIngredient): { text: string; missing: boolean 
 // ───────────────────────── 原物料列表 ─────────────────────────
 
 export function IngredientsPage() {
-  return (
-    <RequireRole roles={['founder', 'chef', 'manager']}>
-      <IngredientList />
-    </RequireRole>
-  );
-}
-
-function IngredientList() {
   const [params] = useSearchParams();
   const [q, setQ] = useState('');
   const [category, setCategory] = useState<string | null>(null);
@@ -171,7 +162,6 @@ function IngredientFormSheet({ ingredient, onClose }: { ingredient?: IngredientD
                 onClose();
                 if (!ingredient) navigate(`/ingredients/${id}`);
               },
-              onError: (e) => toast(e.message, 'danger'),
             })
           }
         >
@@ -221,14 +211,6 @@ function IngredientFormSheet({ ingredient, onClose }: { ingredient?: IngredientD
 // ───────────────────────── 原物料詳情 ─────────────────────────
 
 export function IngredientDetailPage() {
-  return (
-    <RequireRole roles={['founder', 'chef', 'manager']}>
-      <IngredientDetailView />
-    </RequireRole>
-  );
-}
-
-function IngredientDetailView() {
   const { id = '' } = useParams();
   const role = useRole();
   const toast = useToast();
@@ -299,7 +281,7 @@ function IngredientDetailView() {
                 {s.is_default && <Badge tone="ok">預設（計算成本用）</Badge>}
                 {!s.is_active && <Badge>停用</Badge>}
                 <span className="text-sm text-muted">
-                  {formatNumber(s.pack_qty)} {s.pack_unit === 'pc' ? '個' : s.pack_unit}
+                  {formatNumber(s.pack_qty)} {unitLabel(s.pack_unit)}
                   {s.supplier_name && `・${s.supplier_name}`}
                 </span>
                 <div className="ml-auto flex gap-2">
@@ -332,7 +314,7 @@ function IngredientDetailView() {
                           onClick={() => {
                             const reason = prompt('作廢原因（例如：金額打錯）');
                             if (reason?.trim())
-                              voidPrice.mutate({ priceId: pr.id, reason }, { onSuccess: () => toast('已作廢'), onError: (e) => toast(e.message, 'danger') });
+                              voidPrice.mutate({ priceId: pr.id, reason }, { onSuccess: () => toast('已作廢') });
                           }}
                         >
                           作廢
@@ -364,7 +346,7 @@ function IngredientDetailView() {
             {i.units.map((u) => (
               <div key={u.id} className="flex items-center gap-2 py-2.5 text-sm">
                 <span className="flex-1">
-                  1 {u.unit_name} = {formatNumber(u.qty_in_base, 3)} {baseUnit === 'pc' ? '個' : baseUnit}
+                  1 {u.unit_name} = {formatNumber(u.qty_in_base, 3)} {unitLabel(baseUnit)}
                   {u.note && <span className="text-muted">・{u.note}</span>}
                 </span>
                 <Button
@@ -372,7 +354,7 @@ function IngredientDetailView() {
                   variant="ghost"
                   onClick={() =>
                     confirm(`刪除單位「${u.unit_name}」？`) &&
-                    removeUnit.mutate(u.id!, { onSuccess: () => toast('已刪除'), onError: (e) => toast(e.message, 'danger') })
+                    removeUnit.mutate(u.id!, { onSuccess: () => toast('已刪除') })
                   }
                 >
                   刪除
@@ -427,7 +409,7 @@ function UnitSheet({ ingredient, onClose }: { ingredient: IngredientDetail; onCl
       onClose={onClose}
       title="新增專屬單位"
       footer={
-        <Button block loading={save.isPending} onClick={() => save.mutate(undefined, { onSuccess: () => (toast('已新增單位'), onClose()), onError: (e) => toast(e.message, 'danger') })}>
+        <Button block loading={save.isPending} onClick={() => save.mutate(undefined, { onSuccess: () => (toast('已新增單位'), onClose()) })}>
           儲存
         </Button>
       }
@@ -441,7 +423,7 @@ function UnitSheet({ ingredient, onClose }: { ingredient: IngredientDetail; onCl
         <Field label="換算量" className="flex-1">
           {(id) => <NumberInput id={id} value={qty} onChange={setQty} />}
         </Field>
-        <span className="pb-3">{base === 'pc' ? '個' : base}</span>
+        <span className="pb-3">{unitLabel(base)}</span>
       </div>
       <Field label="備註（選填）">{(id) => <Input id={id} value={note} onChange={(e) => setNote(e.target.value)} placeholder="例如：中型蛋平均" />}</Field>
     </Sheet>
@@ -482,7 +464,7 @@ function SpecSheet({ ingredient, spec, onClose }: { ingredient: IngredientDetail
       onClose={onClose}
       title={spec ? '編輯包裝規格' : '新增包裝規格'}
       footer={
-        <Button block loading={save.isPending} onClick={() => save.mutate(undefined, { onSuccess: () => (toast('已儲存規格'), onClose()), onError: (e) => toast(e.message, 'danger') })}>
+        <Button block loading={save.isPending} onClick={() => save.mutate(undefined, { onSuccess: () => (toast('已儲存規格'), onClose()) })}>
           儲存
         </Button>
       }
@@ -500,7 +482,7 @@ function SpecSheet({ ingredient, spec, onClose }: { ingredient: IngredientDetail
             <Select aria-label="單位" value={unit} onChange={(e) => setUnit(e.target.value)} className="w-28" disabled={hasPrices}>
               {units.map((u) => (
                 <option key={u} value={u}>
-                  {u === 'pc' ? '個' : u}
+                  {unitLabel(u)}
                 </option>
               ))}
             </Select>
@@ -547,7 +529,7 @@ function PriceSheet({ spec, onClose }: { spec: SpecRow; onClose: () => void }) {
       onClose={onClose}
       title={`新增報價：${spec.spec_name}`}
       footer={
-        <Button block loading={save.isPending} disabled={toNum(price) === null} onClick={() => save.mutate(undefined, { onSuccess: () => (toast('已新增報價'), onClose()), onError: (e) => toast(e.message, 'danger') })}>
+        <Button block loading={save.isPending} disabled={toNum(price) === null} onClick={() => save.mutate(undefined, { onSuccess: () => (toast('已新增報價'), onClose()) })}>
           儲存
         </Button>
       }
@@ -563,14 +545,6 @@ function PriceSheet({ spec, onClose }: { spec: SpecRow; onClose: () => void }) {
 // ───────────────────────── 供應商 ─────────────────────────
 
 export function SuppliersPage() {
-  return (
-    <RequireRole roles={['founder', 'chef', 'manager']}>
-      <SupplierList />
-    </RequireRole>
-  );
-}
-
-function SupplierList() {
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<Supplier | 'new' | null>(null);
   const list = useRpc<Supplier[]>('list_suppliers', { p_q: null, p_include_inactive: true });
@@ -613,14 +587,6 @@ function SupplierList() {
 }
 
 export function SupplierDetailPage() {
-  return (
-    <RequireRole roles={['founder', 'chef', 'manager']}>
-      <SupplierDetailView />
-    </RequireRole>
-  );
-}
-
-function SupplierDetailView() {
   const { id = '' } = useParams();
   const s = useRpc<SupplierDetail>('get_supplier', { p_id: id });
   const [editing, setEditing] = useState(false);
@@ -683,7 +649,7 @@ function SupplierSheet({ supplier, onClose }: { supplier?: Supplier; onClose: ()
       onClose={onClose}
       title={supplier ? '編輯供應商' : '新增供應商'}
       footer={
-        <Button block loading={save.isPending} onClick={() => save.mutate(undefined, { onSuccess: () => (toast('已儲存'), onClose()), onError: (e) => toast(e.message, 'danger') })}>
+        <Button block loading={save.isPending} onClick={() => save.mutate(undefined, { onSuccess: () => (toast('已儲存'), onClose()) })}>
           儲存
         </Button>
       }

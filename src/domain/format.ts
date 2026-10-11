@@ -17,7 +17,6 @@ function fixed(value: Dec, dp: number, trim = false): string {
   return withThousands(trim ? trimZeros(s) : s);
 }
 
-const COUNT_LIKE = new Set(['pc', '份']);
 const TWO_DP = new Set(['kg', 'L', '台斤']);
 
 /**
@@ -33,7 +32,6 @@ export function formatQty(value: Dec | null, unit: string): string {
     return oneDp.abs().lt(10) ? fixed(oneDp, 1, true) : fixed(value, 0);
   }
   if (TWO_DP.has(unit)) return fixed(value, 2, true);
-  if (COUNT_LIKE.has(unit)) return fixed(value, 1, true);
   return fixed(value, 1, true);
 }
 

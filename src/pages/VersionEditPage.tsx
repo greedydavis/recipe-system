@@ -1,9 +1,9 @@
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useBlocker, useNavigate, useParams } from 'react-router';
-import { RequireRole } from '../app/Layout';
+import { useBlocker, useNavigate, useParams } from 'react-router';
 import { numStr, percentInputToRate, rateToPercentInput, toNum } from '../app/format';
 import { PhotoStrip } from '../components/photos';
+import { VersionPicker } from '../components/VersionPicker';
 import {
   Badge,
   BottomBar,
@@ -18,6 +18,7 @@ import {
   Notice,
   NumberInput,
   PageHeader,
+  QtyUnitField,
   SearchInput,
   Section,
   Select,
@@ -28,15 +29,14 @@ import {
   useToast,
 } from '../components/ui';
 import { rpc, useAction, useRpc } from '../data/api';
-import type { IngredientListItem, RecipeDetail, RecipeListItem, VersionDetail } from '../data/types';
+import type { IngredientListItem, VersionDetail } from '../data/types';
 import { CostCalculator } from '../domain/costing';
 import { decOrNull } from '../domain/decimal';
 import { formatLineCost, formatPercent, formatPrice, formatServingCost } from '../domain/format';
 import { priceMetrics } from '../domain/pricing';
-import { isReferenceable } from '../domain/status';
 import type { CostingBundle, CostingIngredient, CostingVersion, Dimension, OutputUnit, VersionStatus } from '../domain/types';
-import { BASE_UNIT, COMPONENT_LINE_UNITS, compatibleUnits } from '../domain/units';
-import { COMPONENT_KIND_LABEL, DIMENSION_LABEL, HEAT_LABEL, INGREDIENT_CATEGORY_LABEL } from '../i18n/labels';
+import { BASE_UNIT, COMPONENT_LINE_UNITS, compatibleUnits, unitLabel } from '../domain/units';
+import { DIMENSION_LABEL, HEAT_LABEL, INGREDIENT_CATEGORY_LABEL } from '../i18n/labels';
 
 interface DraftLine {
   id: string;
@@ -160,14 +160,6 @@ function payloadFromForm(form: DraftForm) {
 }
 
 export function VersionEditPage() {
-  return (
-    <RequireRole roles={['founder', 'chef']}>
-      <Editor />
-    </RequireRole>
-  );
-}
-
-function Editor() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
@@ -238,7 +230,6 @@ function Editor() {
         setForm((f) => (f ? { ...f, steps: f.steps.map((s) => ({ ...s, persisted: true })) } : f));
         toast('已儲存草案');
       },
-      onError: (e) => toast(e.message, 'danger'),
     });
 
   return (
@@ -269,7 +260,7 @@ function Editor() {
         <Card className="space-y-3">
           <p className="text-sm text-muted">產量是試做完秤出來的結果，可以先留空，試菜當天量到多少再回來填；送核准前才需要填齊。</p>
           {isDish ? (
-            <QtyUnit
+            <QtyUnitField
               label="每份克重（成品一份的重量或容量）"
               hint="出餐時整份秤重；試做後再填也可以"
               qty={form.serving_qty}
@@ -278,14 +269,14 @@ function Editor() {
             />
           ) : (
             <>
-              <QtyUnit
+              <QtyUnitField
                 label="批次產量（實際過濾或完成後的量）"
                 hint="試做後量出來的實際成品量；試做前可以先留空"
                 qty={form.batch_output_qty}
                 unit={form.batch_output_unit}
                 onChange={(qty, unit) => update({ batch_output_qty: qty, batch_output_unit: unit })}
               />
-              <QtyUnit
+              <QtyUnitField
                 label="每份量（一碗或一份使用多少）"
                 hint="一碗要舀多少；試做時確認後再填也可以"
                 qty={form.serving_qty}
@@ -440,20 +431,7 @@ function Editor() {
             update({
               lines: [
                 ...form.lines,
-                {
-                  id: crypto.randomUUID(),
-                  line_kind: 'ingredient',
-                  ingredient_id: ing.id,
-                  component_version_id: null,
-                  name: ing.name,
-                  component_status: null,
-                  quantity: '',
-                  unit: defaultUnit(ing),
-                  waste_percent: '',
-                  prep_note: '',
-                  group_label: form.lines[form.lines.length - 1]?.group_label ?? '',
-                  expanded: false,
-                },
+                newLine(form.lines, { line_kind: 'ingredient', ingredient_id: ing.id, name: ing.name, unit: defaultUnit(ing) }),
               ],
             });
             setPicker(null);
@@ -461,27 +439,24 @@ function Editor() {
         />
       )}
       {picker === 'component' && (
-        <ComponentPicker
-          currentRecipeId={v.recipe.id}
+        <VersionPicker
+          title="加入元件"
+          hint="只能引用已凍結的版本（試菜中、待核准、已定版）。菜品要定版時，引用的元件也必須是已定版。"
+          type="component"
+          excludeRecipeId={v.recipe.id}
+          showRecipeLink
           onClose={() => setPicker(null)}
           onPick={(recipe, version) => {
             update({
               lines: [
                 ...form.lines,
-                {
-                  id: crypto.randomUUID(),
+                newLine(form.lines, {
                   line_kind: 'component',
-                  ingredient_id: null,
                   component_version_id: version.id,
                   name: `${recipe.name} v${version.version_no}`,
                   component_status: version.status,
-                  quantity: '',
                   unit: '份',
-                  waste_percent: '',
-                  prep_note: '',
-                  group_label: form.lines[form.lines.length - 1]?.group_label ?? '',
-                  expanded: false,
-                },
+                }),
               ],
             });
             setPicker(null);
@@ -500,37 +475,55 @@ function move<T>(list: T[], index: number, dir: -1 | 1): T[] {
   return copy;
 }
 
+/** 新的一行用料；分組沿用上一行，連續加同一組的料比較快 */
+function newLine(lines: DraftLine[], init: Pick<DraftLine, 'line_kind' | 'name' | 'unit'> & Partial<DraftLine>): DraftLine {
+  return {
+    id: crypto.randomUUID(),
+    ingredient_id: null,
+    component_version_id: null,
+    component_status: null,
+    quantity: '',
+    waste_percent: '',
+    prep_note: '',
+    group_label: lines[lines.length - 1]?.group_label ?? '',
+    expanded: false,
+    ...init,
+  };
+}
+
+/** 一行用料或步驟右上角的上移、下移、刪除 */
+function RowTools({
+  index,
+  total,
+  removeLabel,
+  onMove,
+  onRemove,
+}: {
+  index: number;
+  total: number;
+  removeLabel: string;
+  onMove: (dir: -1 | 1) => void;
+  onRemove: () => void;
+}) {
+  const tool = 'flex size-9 items-center justify-center rounded-lg';
+  return (
+    <>
+      <button type="button" aria-label="上移" disabled={index === 0} onClick={() => onMove(-1)} className={cx(tool, 'text-muted hover:bg-stone-100 disabled:opacity-30')}>
+        <ArrowUp className="size-4" />
+      </button>
+      <button type="button" aria-label="下移" disabled={index === total - 1} onClick={() => onMove(1)} className={cx(tool, 'text-muted hover:bg-stone-100 disabled:opacity-30')}>
+        <ArrowDown className="size-4" />
+      </button>
+      <button type="button" aria-label={removeLabel} onClick={onRemove} className={cx(tool, 'text-red-700 hover:bg-red-50')}>
+        <Trash2 className="size-4" />
+      </button>
+    </>
+  );
+}
+
 function defaultUnit(ing: CostingIngredient): string {
   if (ing.base_dimension === 'count' && ing.units.length > 0) return ing.units[0].unit_name;
   return BASE_UNIT[ing.base_dimension];
-}
-
-function QtyUnit({
-  label,
-  hint,
-  qty,
-  unit,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  qty: string;
-  unit: OutputUnit;
-  onChange: (qty: string, unit: OutputUnit) => void;
-}) {
-  return (
-    <Field label={label} hint={hint}>
-      {(fid) => (
-        <div className="flex gap-2">
-          <NumberInput id={fid} value={qty} onChange={(val) => onChange(val, unit)} className="flex-1" />
-          <Select aria-label="單位" value={unit} onChange={(e) => onChange(qty, e.target.value as OutputUnit)} className="w-24">
-            <option value="g">g</option>
-            <option value="ml">ml</option>
-          </Select>
-        </div>
-      )}
-    </Field>
-  );
 }
 
 function LineEditor({
@@ -569,15 +562,7 @@ function LineEditor({
           </div>
           {line.group_label && <div className="text-xs text-muted">分組：{line.group_label}</div>}
         </div>
-        <button type="button" aria-label="上移" disabled={index === 0} onClick={() => onMove(-1)} className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-stone-100 disabled:opacity-30">
-          <ArrowUp className="size-4" />
-        </button>
-        <button type="button" aria-label="下移" disabled={index === total - 1} onClick={() => onMove(1)} className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-stone-100 disabled:opacity-30">
-          <ArrowDown className="size-4" />
-        </button>
-        <button type="button" aria-label="刪除此行" onClick={onRemove} className="flex size-9 items-center justify-center rounded-lg text-red-700 hover:bg-red-50">
-          <Trash2 className="size-4" />
-        </button>
+        <RowTools index={index} total={total} removeLabel="刪除此行" onMove={onMove} onRemove={onRemove} />
       </div>
       <div className="flex gap-2">
         <NumberInput
@@ -590,7 +575,7 @@ function LineEditor({
         <Select aria-label={`${line.name} 單位`} value={line.unit} onChange={(e) => onChange({ unit: e.target.value })} className="w-28">
           {units.map((u) => (
             <option key={u} value={u}>
-              {u === 'pc' ? '個' : u}
+              {unitLabel(u)}
             </option>
           ))}
         </Select>
@@ -658,15 +643,7 @@ function StepEditor({
       <div className="flex items-center gap-2">
         <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-100 font-bold text-brand-700">{index + 1}</div>
         <div className="flex-1" />
-        <button type="button" aria-label="上移" disabled={index === 0} onClick={() => onMove(-1)} className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-stone-100 disabled:opacity-30">
-          <ArrowUp className="size-4" />
-        </button>
-        <button type="button" aria-label="下移" disabled={index === total - 1} onClick={() => onMove(1)} className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-stone-100 disabled:opacity-30">
-          <ArrowDown className="size-4" />
-        </button>
-        <button type="button" aria-label="刪除步驟" onClick={onRemove} className="flex size-9 items-center justify-center rounded-lg text-red-700 hover:bg-red-50">
-          <Trash2 className="size-4" />
-        </button>
+        <RowTools index={index} total={total} removeLabel="刪除步驟" onMove={onMove} onRemove={onRemove} />
       </div>
       <Textarea aria-label={`步驟 ${index + 1} 說明`} value={step.instruction} onChange={(e) => onChange({ instruction: e.target.value })} placeholder="作法說明" />
       <div className="grid grid-cols-3 gap-2">
@@ -876,7 +853,6 @@ function IngredientPicker({
                           used_in_count: 0,
                         });
                       },
-                      onError: (e) => toast(e.message, 'danger'),
                     },
                   )
                 }
@@ -886,75 +862,6 @@ function IngredientPicker({
             </>
           )}
         </Card>
-      )}
-    </Sheet>
-  );
-}
-
-function ComponentPicker({
-  currentRecipeId,
-  onClose,
-  onPick,
-}: {
-  currentRecipeId: string;
-  onClose: () => void;
-  onPick: (recipe: RecipeDetail, version: RecipeDetail['versions'][number]) => void;
-}) {
-  const [q, setQ] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
-  const list = useRpc<RecipeListItem[]>('list_recipes', { p_type: 'component', p_q: null, p_include_archived: false });
-  const detail = useRpc<RecipeDetail>('get_recipe', { p_id: selected }, { enabled: !!selected });
-  const term = q.trim();
-  const matches = (list.data ?? []).filter((r) => r.id !== currentRecipeId && (!term || r.name.includes(term)));
-
-  return (
-    <Sheet open title={selected ? '選擇版本' : '加入元件'} onClose={onClose}>
-      {!selected ? (
-        <>
-          <SearchInput value={q} onChange={setQ} placeholder="搜尋湯底、醬料、配料" />
-          {list.isLoading && <Loading />}
-          <div className="divide-y divide-line">
-            {matches.map((r) => (
-              <button key={r.id} type="button" onClick={() => setSelected(r.id)} className="flex min-h-12 w-full items-center gap-2 py-2 text-left hover:bg-brand-50">
-                <span className="flex-1">{r.name}</span>
-                <span className="text-xs text-muted">{COMPONENT_KIND_LABEL[r.component_kind ?? 'other']}</span>
-                <StatusBadge status={r.locked ? 'locked' : r.latest.status} />
-              </button>
-            ))}
-            {list.data && matches.length === 0 && <p className="py-3 text-sm text-muted">沒有符合的元件；請先到「食譜 → 元件」建立。</p>}
-          </div>
-        </>
-      ) : (
-        <>
-          <Button small variant="ghost" onClick={() => setSelected(null)}>
-            ← 回到元件清單
-          </Button>
-          {detail.isLoading && <Loading />}
-          {detail.data && (
-            <div className="space-y-2">
-              <p className="text-sm text-muted">只能引用已凍結的版本（試菜中、待核准、已定版）。菜品要定版時，引用的元件也必須是已定版。</p>
-              {detail.data.versions.map((ver) => {
-                const ok = isReferenceable(ver.status);
-                return (
-                  <button
-                    key={ver.id}
-                    type="button"
-                    disabled={!ok}
-                    onClick={() => onPick(detail.data!, ver)}
-                    className="flex min-h-12 w-full items-center gap-2 rounded-xl px-3 py-2 text-left ring-1 ring-line hover:bg-brand-50 disabled:opacity-50"
-                  >
-                    <span className="font-semibold">v{ver.version_no}</span>
-                    <span className="flex-1 truncate text-sm">{ver.title}</span>
-                    <StatusBadge status={ver.status} />
-                  </button>
-                );
-              })}
-              <Link to={`/recipes/${detail.data.id}`} className="inline-block min-h-11 py-2 text-sm text-brand-700">
-                查看元件詳情 →
-              </Link>
-            </div>
-          )}
-        </>
       )}
     </Sheet>
   );

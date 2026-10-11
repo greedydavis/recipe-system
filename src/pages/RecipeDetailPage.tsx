@@ -2,7 +2,6 @@ import { Archive, ChevronRight, Copy, Pencil } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { can, useRole } from '../app/auth';
-import { RequireRole } from '../app/Layout';
 import { useCosts } from '../app/costing';
 import { formatDate, formatScore, percentInputToRate, rateToPercentInput, todayIso, toNum } from '../app/format';
 import {
@@ -29,14 +28,6 @@ import type { ComponentKind } from '../domain/types';
 import { COMPONENT_KIND_LABEL, RECIPE_TYPE_LABEL } from '../i18n/labels';
 
 export function RecipeDetailPage() {
-  return (
-    <RequireRole roles={['founder', 'chef', 'manager']}>
-      <RecipeDetailView />
-    </RequireRole>
-  );
-}
-
-function RecipeDetailView() {
   const { id = '' } = useParams();
   const role = useRole();
   const navigate = useNavigate();
@@ -127,7 +118,6 @@ function RecipeDetailView() {
                     toast(`已從 v${copySource.version_no} 複製出新草案`);
                     navigate(`/versions/${newId}/edit`);
                   },
-                  onError: (e) => toast(e.message, 'danger'),
                 })
               }
             >
@@ -222,7 +212,6 @@ function RecipeDetailView() {
           onClick={() =>
             archive.mutate(!r.is_archived, {
               onSuccess: () => toast(r.is_archived ? '已取消封存' : '已封存'),
-              onError: (e) => toast(e.message, 'danger'),
             })
           }
         >
@@ -264,7 +253,7 @@ function EditRecipeSheet({ recipe, open, onClose }: { recipe: RecipeDetail; open
                 component_kind: kind,
                 target_food_cost_rate: percentInputToRate(target) ?? '',
               },
-              { onSuccess: () => (toast('已儲存'), onClose()), onError: (e) => toast(e.message, 'danger') },
+              { onSuccess: () => (toast('已儲存'), onClose()) },
             );
           }}
         >
@@ -323,7 +312,6 @@ function MenuPriceSheet({ recipeId, open, onClose, suggested }: { recipeId: stri
                 setPrice('');
                 onClose();
               },
-              onError: (e) => toast(e.message, 'danger'),
             })
           }
         >

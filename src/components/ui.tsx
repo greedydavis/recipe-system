@@ -321,6 +321,35 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
   );
 });
 
+/** 數量＋g／ml 單位（產量、每份量） */
+export function QtyUnitField({
+  label,
+  hint,
+  qty,
+  unit,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  qty: string;
+  unit: 'g' | 'ml';
+  onChange: (qty: string, unit: 'g' | 'ml') => void;
+}) {
+  return (
+    <Field label={label} hint={hint}>
+      {(id) => (
+        <div className="flex gap-2">
+          <NumberInput id={id} value={qty} onChange={(v) => onChange(v, unit)} className="flex-1" />
+          <Select aria-label={`${label}單位`} value={unit} onChange={(e) => onChange(qty, e.target.value as 'g' | 'ml')} className="w-24">
+            <option value="g">g</option>
+            <option value="ml">ml</option>
+          </Select>
+        </div>
+      )}
+    </Field>
+  );
+}
+
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea(
   { className, rows = 3, ...rest },
   ref,

@@ -1,4 +1,3 @@
-import imageCompression from 'browser-image-compression';
 import { Camera, ImageOff, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../app/auth';
@@ -64,6 +63,8 @@ export function PhotoStrip({
 
   const upload = useAction(async (files: File[]) => {
     if (!backend) return;
+    // 壓縮套件只有上傳時才用得到，用到再載入
+    const { default: imageCompression } = await import('browser-image-compression');
     for (const file of files) {
       const compressed = await imageCompression(file, {
         maxWidthOrHeight: 1600,
@@ -133,7 +134,6 @@ export function PhotoStrip({
           if (files.length === 0) return;
           upload.mutate(files, {
             onSuccess: () => toast(`已上傳 ${files.length} 張照片`),
-            onError: (err) => toast(err.message, 'danger'),
           });
         }}
       />
@@ -152,7 +152,6 @@ export function PhotoStrip({
                       setViewing(null);
                       toast('已刪除照片');
                     },
-                    onError: (err) => toast(err.message, 'danger'),
                   });
                 }}
               >

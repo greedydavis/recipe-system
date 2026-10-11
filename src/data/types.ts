@@ -1,9 +1,7 @@
 import type {
   ComponentKind,
   CostingIngredient,
-  Dimension,
   LineKind,
-  NumLike,
   OutputUnit,
   RecipeType,
   Role,
@@ -29,14 +27,6 @@ export interface TeamMember {
 export interface Profile extends TeamMember {
   is_active: boolean;
   created_at: string;
-}
-
-export interface Unit {
-  code: string;
-  name_zh: string;
-  dimension: Dimension;
-  factor_to_base: NumLike;
-  sort_order: number;
 }
 
 export interface IngredientListItem extends CostingIngredient {

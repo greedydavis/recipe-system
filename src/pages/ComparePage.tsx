@@ -2,13 +2,13 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { useCosts } from '../app/costing';
 import { formatScore, formatSigned } from '../app/format';
-import { RequireRole } from '../app/Layout';
 import { Badge, Card, EmptyState, ErrorState, Loading, PageHeader, Section, Select, StatusBadge, cx } from '../components/ui';
 import { useRpc } from '../data/api';
 import type { RecipeDetail, VersionDetail } from '../data/types';
 import { dec } from '../domain/decimal';
 import { type ChangeKind, diffLines, diffSteps } from '../domain/diff';
 import { formatNumber, formatPercent, formatQty, formatServingCost } from '../domain/format';
+import { unitLabel } from '../domain/units';
 import { STATUS_LABEL } from '../i18n/labels';
 
 const CHANGE_STYLE: Record<ChangeKind, string> = {
@@ -20,14 +20,6 @@ const CHANGE_STYLE: Record<ChangeKind, string> = {
 const CHANGE_LABEL: Record<ChangeKind, string> = { added: '新增', removed: '刪除', changed: '修改', same: '' };
 
 export function ComparePage() {
-  return (
-    <RequireRole roles={['founder', 'chef', 'manager']}>
-      <Compare />
-    </RequireRole>
-  );
-}
-
-function Compare() {
   const [params, setParams] = useSearchParams();
   const aId = params.get('a');
   const bId = params.get('b');
@@ -38,12 +30,7 @@ function Compare() {
 
   const lineDiff = useMemo(() => {
     if (!a.data || !b.data) return [];
-    const map = (v: VersionDetail) =>
-      v.lines.map((l) => ({
-        ...l,
-        component_recipe_id: l.component_recipe_id,
-      }));
-    return diffLines(map(a.data), map(b.data));
+    return diffLines(a.data.lines, b.data.lines);
   }, [a.data, b.data]);
   const stepDiff = useMemo(() => (a.data && b.data ? diffSteps(a.data.steps, b.data.steps) : []), [a.data, b.data]);
 
@@ -125,11 +112,11 @@ function Compare() {
                 <div key={d.key} className={cx('flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm', CHANGE_STYLE[d.change])}>
                   <span className="min-w-24 flex-1 font-medium">{d.name}</span>
                   <span className="tabular-nums text-muted">
-                    {d.a ? `${d.a.quantity === null ? '待填' : formatQty(dec(d.a.quantity), d.a.unit)} ${d.a.unit}` : '—'}
+                    {d.a ? `${d.a.quantity === null ? '待填' : formatQty(dec(d.a.quantity), d.a.unit)} ${unitLabel(d.a.unit)}` : '—'}
                   </span>
                   <span aria-hidden>→</span>
                   <span className="font-semibold tabular-nums">
-                    {d.b ? `${d.b.quantity === null ? '待填' : formatQty(dec(d.b.quantity), d.b.unit)} ${d.b.unit}` : '—'}
+                    {d.b ? `${d.b.quantity === null ? '待填' : formatQty(dec(d.b.quantity), d.b.unit)} ${unitLabel(d.b.unit)}` : '—'}
                   </span>
                   {d.qtyRatio && !d.qtyRatio.isZero() && (
                     <span className={cx('tabular-nums', d.qtyRatio.gt(0) ? 'text-emerald-700' : 'text-red-700')}>

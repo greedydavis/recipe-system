@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { StrictMode } from 'react';
+import { type ReactNode, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Navigate, Outlet, RouterProvider, createHashRouter } from 'react-router';
 import { AuthProvider, useAuth } from './app/auth';
-import { Layout } from './app/Layout';
+import { Layout, RequireRole } from './app/Layout';
 import { Loading, Notice, ToastProvider } from './components/ui';
+import type { Role } from './domain/types';
 import './index.css';
 import { AuditPage, DataPage, MorePage, SettingsPage, UsersPage } from './pages/AdminPages';
 import { CardPage } from './pages/CardPage';
@@ -52,6 +53,13 @@ function Gate() {
   return <Outlet />;
 }
 
+const KITCHEN: Role[] = ['founder', 'chef', 'manager'];
+
+/** 哪個角色能進哪一頁集中寫在這裡；這只是畫面上的體驗，真正的權限由資料庫 RPC 檢查 */
+function guard(roles: Role[], element: ReactNode) {
+  return <RequireRole roles={roles}>{element}</RequireRole>;
+}
+
 const router = createHashRouter([
   {
     element: <Gate />,
@@ -60,26 +68,26 @@ const router = createHashRouter([
         element: <Layout />,
         children: [
           { index: true, element: <HomePage /> },
-          { path: 'progress', element: <ProgressPage /> },
-          { path: 'recipes', element: <RecipesPage /> },
-          { path: 'recipes/:id', element: <RecipeDetailPage /> },
-          { path: 'versions/:id', element: <VersionPage /> },
-          { path: 'versions/:id/edit', element: <VersionEditPage /> },
-          { path: 'versions/:id/card', element: <CardPage /> },
-          { path: 'compare', element: <ComparePage /> },
+          { path: 'progress', element: guard(KITCHEN, <ProgressPage />) },
+          { path: 'recipes', element: guard(KITCHEN, <RecipesPage />) },
+          { path: 'recipes/:id', element: guard(KITCHEN, <RecipeDetailPage />) },
+          { path: 'versions/:id', element: guard(KITCHEN, <VersionPage />) },
+          { path: 'versions/:id/edit', element: guard(['founder', 'chef'], <VersionEditPage />) },
+          { path: 'versions/:id/card', element: guard(KITCHEN, <CardPage />) },
+          { path: 'compare', element: guard(KITCHEN, <ComparePage />) },
           { path: 'tastings', element: <TastingsPage /> },
-          { path: 'tastings/new', element: <TastingNewPage /> },
-          { path: 'tastings/:id', element: <TastingSessionPage /> },
+          { path: 'tastings/new', element: guard(KITCHEN, <TastingNewPage />) },
+          { path: 'tastings/:id', element: guard(KITCHEN, <TastingSessionPage />) },
           { path: 'tasting-items/:id/feedback', element: <FeedbackPage /> },
-          { path: 'ingredients', element: <IngredientsPage /> },
-          { path: 'ingredients/:id', element: <IngredientDetailPage /> },
-          { path: 'suppliers', element: <SuppliersPage /> },
-          { path: 'suppliers/:id', element: <SupplierDetailPage /> },
+          { path: 'ingredients', element: guard(KITCHEN, <IngredientsPage />) },
+          { path: 'ingredients/:id', element: guard(KITCHEN, <IngredientDetailPage />) },
+          { path: 'suppliers', element: guard(KITCHEN, <SuppliersPage />) },
+          { path: 'suppliers/:id', element: guard(KITCHEN, <SupplierDetailPage />) },
           { path: 'more', element: <MorePage /> },
-          { path: 'admin/users', element: <UsersPage /> },
-          { path: 'admin/settings', element: <SettingsPage /> },
-          { path: 'admin/data', element: <DataPage /> },
-          { path: 'audit', element: <AuditPage /> },
+          { path: 'admin/users', element: guard(['founder'], <UsersPage />) },
+          { path: 'admin/settings', element: guard(KITCHEN, <SettingsPage />) },
+          { path: 'admin/data', element: guard(['founder'], <DataPage />) },
+          { path: 'audit', element: guard(['founder', 'chef'], <AuditPage />) },
           { path: '*', element: <Navigate to="/" replace /> },
         ],
       },

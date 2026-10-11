@@ -5,7 +5,6 @@ import { can, useRole } from '../app/auth';
 import { useCosts } from '../app/costing';
 import { formatDate, formatDateTime, toNum } from '../app/format';
 import { groupLines } from '../app/lines';
-import { RequireRole } from '../app/Layout';
 import { PhotoThumb } from '../components/photos';
 import { Button, Checkbox, ChipGroup, ErrorState, Loading, Notice, NumberInput, PageHeader, Select, StatusBadge, cx } from '../components/ui';
 import { useRpc } from '../data/api';
@@ -23,19 +22,12 @@ import {
 } from '../domain/format';
 import { type ScaleMode, scaleFactor } from '../domain/scaling';
 import type { OutputUnit } from '../domain/types';
+import { unitLabel } from '../domain/units';
 import { HEAT_LABEL, STATUS_LABEL } from '../i18n/labels';
 
 type Preset = '1' | '10' | 'batch' | 'servings' | 'output';
 
 export function CardPage() {
-  return (
-    <RequireRole roles={['founder', 'chef', 'manager']}>
-      <StandardCard />
-    </RequireRole>
-  );
-}
-
-function StandardCard() {
   const { id = '' } = useParams();
   const role = useRole();
   const version = useRpc<VersionDetail>('get_version', { p_id: id });
@@ -218,7 +210,7 @@ function StandardCard() {
                           {l.component_status === 'retired' && <div className="text-xs font-semibold text-red-700">此元件版本已被取代</div>}
                         </td>
                         <td className="py-1.5 text-right font-semibold whitespace-nowrap tabular-nums">
-                          {l.quantity === null ? '待填' : `${formatQty(scaled, l.unit)} ${l.unit === 'pc' ? '個' : l.unit}`}
+                          {l.quantity === null ? '待填' : `${formatQty(scaled, l.unit)} ${unitLabel(l.unit)}`}
                           {scaled && altUnitHint(scaled, l.unit) && <div className="text-xs font-normal text-muted">{altUnitHint(scaled, l.unit)}</div>}
                         </td>
                         <td className="py-1.5 pl-3 text-sm">{l.prep_note}</td>

@@ -2,7 +2,6 @@ import { AlertTriangle, ChevronRight, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { can, useRole } from '../app/auth';
-import { RequireRole } from '../app/Layout';
 import { useCosts } from '../app/costing';
 import {
   Badge,
@@ -39,14 +38,6 @@ function useDebounced<T>(value: T, ms = 250): T {
 }
 
 export function RecipesPage() {
-  return (
-    <RequireRole roles={['founder', 'chef', 'manager']}>
-      <RecipeList />
-    </RequireRole>
-  );
-}
-
-function RecipeList() {
   const role = useRole();
   const [params, setParams] = useSearchParams();
   const type = (params.get('type') as RecipeType) || 'dish';
@@ -195,7 +186,6 @@ function NewRecipeSheet({ open, onClose, defaultType }: { open: boolean; onClose
                     setDescription('');
                     navigate(`/versions/${r.version_id}/edit`);
                   },
-                  onError: (e) => toast(e.message, 'danger'),
                 },
               )
             }
