@@ -11,3 +11,5 @@ supabase/setup-all.sql
 supabase/upgrade.sql
 test-results/
 playwright-report/
+# 配方表原始檔放在專案資料夾也不進 repo
+/*.xlsx

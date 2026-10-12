@@ -1,17 +1,22 @@
-"""把《餐廳菜單_完整試作與配方表.xlsx》轉成系統可匯入的 JSON。
+"""把《菜單配方表.xlsx》轉成系統可匯入的 JSON。
 
 用法：
     python scripts/import_baseline.py [xlsx 路徑] [輸出路徑]
 
-預設讀取上一層資料夾的基準版 xlsx，輸出到 private/baseline-seed.json（private/ 不進 git）。
-輸出後在系統「更多 → 資料匯出與匯入」選擇這個檔案匯入。
+預設依序在專案資料夾、private/、上一層資料夾找「菜單配方表.xlsx」，輸出到 private/baseline-seed.json
+（private/ 與專案資料夾裡的 xlsx 都不進 git）。輸出後在系統「更多 → 資料匯出與匯入」選擇這個檔案匯入。
 
-轉換規則：
-- 「基底湯食譜」的每一種湯底 → 元件（湯底）v1；用量齊全時自動送「試菜中」，菜品才能引用
-- 「菜單試作表」的每一列 → 菜品 v1 草案；欄位名稱當作用料分組
-- 有寫克重的用料帶入用量；沒寫的用量留空（系統顯示「用量待填」）
-- 範圍（例如 0–10 ml）不猜數字，用量留空並把範圍寫進處理方式
-- 「前置／出餐」作法轉成步驟；試作觀察與資料疑點寫進版本備註
+轉換規則（不猜數字：沒有寫克重或毫升的，用量一律留空，系統顯示「用量待填」）：
+- 「基湯食譜」每一列 → 元件（湯底）v1。原料欄一行一項；「1 隻」「適量」這類寫法沒辦法換成重量，
+  用量留空、原文寫進處理方式。用量都填齊才會自動送「試菜中」。
+- 「菜單食譜」每一列 → 菜品 v1 草案。
+  - 「基底湯／液體」「麵量」→ 用料
+  - 「材料」是整批醬料的配方 → 另外建立元件（醬料），「醬料做法」是它的步驟；菜品引用這個醬料，每份用量留空
+  - 「第一版建議作法」裡「蛋白質前置作業」底下一行一項、有克重的 → 用料；其餘文字與「前置／出餐」→ 步驟
+- 試菜結果、調整方向等欄位有填的話寫進版本備註。
+
+重新匯入時，系統裡已經有的食譜只有在配方表多了新內容（新的用量、新引用的元件、新的步驟）時才會多一個草案版本，
+舊版本不會被覆蓋；配方表裡拿掉的菜不會被刪除或封存。
 """
 
 from __future__ import annotations
@@ -26,95 +31,90 @@ from pathlib import Path
 import openpyxl
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_XLSX = ROOT.parent / "餐廳菜單_完整試作與配方表.xlsx"
+XLSX_NAME = "菜單配方表.xlsx"
 DEFAULT_OUT = ROOT / "private" / "baseline-seed.json"
+SOURCE_NOTE = "由《菜單配方表》匯入"
 
-SOUP_COMPONENTS = {"上湯": "上湯", "魚高湯": "魚高湯（黃魚奶白）"}
+# 配方表裡改過名字的食譜：新名稱 → 系統裡可能還在用的舊名稱。匯入時會先改名，再當成同一個食譜的新版本
+RENAMED = {"奶白魚高湯": ["魚高湯（黃魚奶白）"]}
 
 # 同一種原物料的不同寫法 → (標準名稱, 處理方式)
 ALIASES = {
     "蛤蠣": ("蛤蜊", ""),
     "蔥花": ("青蔥", "切蔥花"),
+    "蔥": ("青蔥", ""),
     "薑片": ("薑", "切片"),
+    "生薑": ("薑", ""),
+    "鹽巴": ("鹽", ""),
     "冷水": ("水", "冷水"),
     "熱水": ("水", "熱水"),
     "飲用水": ("水", "飲用水"),
-    "蒜油或蔥油": ("蔥油", "或改用蒜油"),
-    "胡麻陳醋麵": ("胡麻陳醋醬", "原表寫「胡麻陳醋麵」，推測為醬汁"),
     "生麵": ("生麵條", ""),
-    "檸檬片": ("檸檬", "切片"),
+    "老菜圃汁": ("老菜圃料汁", ""),
 }
 
 CATEGORY = {
-    "meat": ["雞骨架", "豬大骨", "老母雞／雞腿骨", "去骨腿排", "雞清胸", "帶骨雞腿", "雞腿肉"],
-    "seafood": ["蛤蜊", "魚片", "黃魚骨／魚體"],
-    "produce": ["青蔥", "薑", "蔥白", "絲瓜", "檸檬"],
-    "dry_goods": ["乾香菇", "蝦米", "老菜圃", "雪菜"],
-    "seasoning": ["鹽", "白胡椒"],
-    "oil": ["食用油", "芝麻油", "香油"],
+    "meat": ["去骨雞腿肉", "老母雞", "豬蹄", "後腿肉", "梅花肉"],
+    "seafood": ["蛤蜊", "鱸魚", "鱸魚淨肉"],
+    "produce": ["青蔥", "薑", "蒜苗"],
+    "dry_goods": ["乾干貝"],
+    "seasoning": [
+        "鹽", "糖", "白糖", "白胡椒", "胡椒粉", "米酒", "薑汁", "大骨粉", "黃豆醬", "排骨醬", "乾黃醬",
+        "甜麵醬", "十三香", "MSG", "芝麻醬", "味極鮮", "醬油", "蠔油", "陳醋",
+    ],
+    "oil": ["中性油", "沙拉油"],
     "grain": ["生麵條"],
-    "beverage": ["烏龍茶葉", "酸梅湯原液"],
 }
 
 # 店內自製的半成品：先建成原物料，備註提醒之後改成元件食譜
-PREPARED = {"老菜圃料汁", "蛋絲", "蔥油", "炸蒜片", "鹽蔥花", "酥炸蔥", "蔥蒜油", "拌麵醬汁", "臭豆腐炸醬", "胡麻陳醋醬", "茶湯", "糖漿", "餛飩"}
-VOLUME_HINTS = ("油", "汁", "水", "糖漿", "原液", "茶湯")
+PREPARED = {"老菜圃料汁", "茶湯"}
+VOLUME_HINTS = ("油", "汁", "水", "茶湯")
+VOLUME_UNITS = {"ml", "L"}
 
-GROUP_LABEL = {
-    "基底湯／液體": "湯底／液體",
-    "蛋白質": "蛋白質",
-    "蔬菜／配料": "蔬菜／配料",
-    "香料／辛香料": "辛香料",
-    "油脂": "油脂",
-    "Sauce／調味": "調味",
-    "麵量": "麵",
-}
-
-ITEM_RE = re.compile(r"^(?P<name>.+?)\s*(?P<rest>(?:約\s*)?\d.*)?$")
-QTY_RE = re.compile(r"(?P<qty>\d+(?:\.\d+)?)\s*(?P<unit>g|ml)\b")
-RANGE_RE = re.compile(r"\d+(?:\.\d+)?\s*[–-]\s*\d+(?:\.\d+)?\s*(?:g|ml)")
+UNIT = r"(?P<unit>kg|g|ml|L)"
+NUM = r"(?P<qty>\d+(?:\.\d+)?)"
+# 「100g 某某肉」
+LEAD_RE = re.compile(rf"^{NUM}\s*{UNIT}\s*(?P<name>\D.*)$")
+# 「某某肉 100g」；名稱裡不能有數字或頓號，避免把一整句話當成一項用料
+TRAIL_RE = re.compile(rf"^(?P<name>[^\d、，。：]+?)\s*{NUM}\s*{UNIT}$")
+# 「1 隻 老母雞」「適量 大骨粉」：沒辦法換成重量
+COUNT_RE = re.compile(r"^(?P<count>\d+\s*[隻支根尾顆片把條塊]|適量|少許)\s*(?P<rest>.+)$")
+PAREN_RE = re.compile(r"[（(](.+?)[）)]")
 
 
 def clean(text) -> str:
-    return re.sub(r"[ 　]+", " ", str(text or "")).strip()
+    return re.sub(r"[ \t　]+", " ", str(text or "")).strip()
 
 
-def split_items(cell) -> list[str]:
-    text = clean(cell)
-    if not text or text == "無":
-        return []
-    parts = re.split(r"[\n、]", text)
-    return [p.strip() for p in parts if p.strip() and p.strip() != "無"]
+def cell_lines(cell) -> list[str]:
+    return [t for t in (clean(x) for x in str(cell or "").split("\n")) if t and t != "無"]
 
 
-def parse_item(raw: str) -> dict:
-    """「湯底 300 ml」「鹽 1 g（視鹹度）」「某某片 3 片／約 15 g」「糖漿 0–5 ml」"""
-    note = ""
-    paren = re.search(r"[（(](.+?)[）)]", raw)
+def number(text: str):
+    value = float(text)
+    return int(value) if value.is_integer() else value
+
+
+def parse_material(raw: str) -> dict:
+    """一項用料：有克重／毫升就帶入，其餘留空並把原文留在 note"""
+    notes = []
+    raw = clean(raw)
+    paren = PAREN_RE.search(raw)
     if paren:
-        note = paren.group(1)
-        raw = (raw[: paren.start()] + raw[paren.end():]).strip()
-    m = ITEM_RE.match(raw)
-    name = clean(m.group("name")) if m else raw
-    # 「某某醬   g」：有單位但沒填數字
-    name = re.sub(r"\s+(?:g|ml)$", "", name)
-    rest = (m.group("rest") or "") if m else ""
-    qty = None
-    unit = None
-    if RANGE_RE.search(rest):
-        note = "；".join(x for x in [rest.strip(), note] if x)
-    else:
-        q = None
-        for q in QTY_RE.finditer(rest):
-            pass  # 取最後一個（「2 片／約 20 g」取 20 g）
-        if q:
-            qty = float(q.group("qty"))
-            qty = int(qty) if qty.is_integer() else qty
-            unit = q.group("unit")
-            extra = rest[: q.start()].strip(" ／/約")
-            if extra:
-                note = "；".join(x for x in [extra, note] if x)
-    return {"name": name, "quantity": qty, "unit": unit, "note": note}
+        notes.append(clean(paren.group(1)))
+        raw = clean(raw[: paren.start()] + raw[paren.end():])
+    count = COUNT_RE.match(raw)
+    if count:
+        notes.insert(0, clean(count.group("count")))
+        raw = clean(count.group("rest"))
+    m = LEAD_RE.match(raw) or TRAIL_RE.match(raw)
+    if m:
+        return {"name": clean(m.group("name")), "quantity": number(m.group("qty")), "unit": m.group("unit"), "note": "；".join(notes)}
+    return {"name": raw, "quantity": None, "unit": None, "note": "；".join(notes)}
+
+
+def is_material_line(raw: str) -> bool:
+    return parse_material(raw)["quantity"] is not None
 
 
 class Registry:
@@ -124,7 +124,7 @@ class Registry:
     def resolve(self, name: str, unit: str | None) -> tuple[str, str]:
         canonical, prep = ALIASES.get(name, (name, ""))
         if canonical not in self.items:
-            if unit == "ml" or (unit is None and canonical.endswith(VOLUME_HINTS)):
+            if unit in VOLUME_UNITS or (unit is None and canonical.endswith(VOLUME_HINTS)):
                 base = "volume"
             else:
                 base = "mass"
@@ -140,82 +140,149 @@ class Registry:
         return canonical, prep
 
 
-def line_for(item: dict, registry: Registry, group: str) -> dict:
-    name = item["name"]
-    prep_parts = [item["note"]]
-    for soup_key, soup_name in SOUP_COMPONENTS.items():
-        if name == soup_key:
-            return {
-                "component": soup_name,
-                "quantity": item["quantity"],
-                "unit": item["unit"] or "ml",
-                "prep_note": "；".join(p for p in prep_parts if p),
-                "group_label": group,
-            }
-    canonical, prep = registry.resolve(name, item["unit"])
+def ingredient_line(item: dict, registry: Registry, group: str) -> dict:
+    canonical, prep = registry.resolve(item["name"], item["unit"])
     base = registry.items[canonical]["base_dimension"]
-    unit = item["unit"] or ("ml" if base == "volume" else "g")
-    if canonical != name and not prep:
-        prep_parts.insert(0, f"原表寫「{name}」")
+    renamed = f"原表寫「{item['name']}」" if canonical != item["name"] and not prep else ""
     return {
         "ingredient": canonical,
         "quantity": item["quantity"],
-        "unit": unit,
-        "prep_note": "；".join(p for p in [prep, *prep_parts] if p),
+        "unit": item["unit"] or ("ml" if base == "volume" else "g"),
+        "prep_note": "；".join(p for p in [prep, renamed, item["note"]] if p),
         "group_label": group,
     }
 
 
-def parse_shelf_life(text: str) -> tuple[int | None, str]:
-    """「建議 24–48 小時內用畢」→ (24, "24–48")；取較短的時間比較保守"""
-    m = re.search(r"(\d+)(?:\s*[–-]\s*(\d+))?\s*小時內用畢", text or "")
-    if not m:
-        return None, ""
-    return int(m.group(1)), (f"{m.group(1)}–{m.group(2)}" if m.group(2) else m.group(1))
+def component_line(name: str, item: dict, group: str, note: str = "") -> dict:
+    return {
+        "component": name,
+        "quantity": item["quantity"],
+        "unit": item["unit"] or "g",
+        "prep_note": "；".join(p for p in [item["note"], note] if p),
+        "group_label": group,
+    }
+
+
+def numbered_steps(text, pattern: str) -> list[dict]:
+    """「1.…⏎2.…」或「STEP1：…STEP2：…」拆成一個步驟一筆"""
+    parts = [clean(p) for p in re.split(pattern, str(text or ""))]
+    return [{"instruction": p} for p in parts if p and not p.endswith("：")]
+
+
+def rows_as_dicts(ws):
+    header = [clean(c.value) for c in ws[4]]
+    for r in ws.iter_rows(min_row=5, values_only=True):
+        yield dict(zip(header, r))
+
+
+def version(notes: list[str], lines: list[dict], steps: list[dict], **extra) -> dict:
+    return {"title": "基準版", "change_note": SOURCE_NOTE, "notes": "\n".join(notes), "lines": lines, "steps": steps, **extra}
+
+
+def sauce_name(dish: str) -> str:
+    base = dish.removesuffix("麵")
+    return base if base.endswith("醬") else base + "醬"
+
+
+def build_dishes(ws, standard_ws, registry: Registry, soup_names: list[str]) -> tuple[list[dict], list[dict]]:
+    noodle_standard = {clean(r[0]): clean(r[1]) for r in standard_ws.iter_rows(min_row=5, values_only=True) if r[0]}
+
+    def soup_for(name: str) -> str | None:
+        return next((s for s in soup_names if s == name or s.endswith(name)), None)
+
+    dishes, sauces = [], []
+    category = ""
+    for row in rows_as_dicts(ws):
+        name = clean(row.get("原菜名"))
+        if not name:
+            continue
+        notes = []
+        if clean(row.get("分類")):
+            category = clean(row["分類"])
+        elif category:
+            notes.append(f"分類：原表這一列沒有填，暫時沿用上一列的「{category}」，請確認。")
+
+        lines = []
+        for col, group in [("基底湯／液體", "湯底／液體"), ("麵量", "麵")]:
+            for raw in cell_lines(row.get(col)):
+                item = parse_material(raw)
+                soup = soup_for(item["name"])
+                lines.append(component_line(soup, item, group) if soup else ingredient_line(item, registry, group))
+
+        # 「材料」是整批醬料的配方，不是一份的量
+        materials = [m for m in cell_lines(row.get("材料")) if not m.endswith("：")]
+        if materials:
+            sauce = sauce_name(name)
+            sauce_lines = [ingredient_line(parse_material(m), registry, "") for m in materials]
+            sauces.append(
+                {
+                    "name": sauce,
+                    "type": "component",
+                    "component_kind": "sauce",
+                    "description": f"基準版：「{name}」的整批醬料配方（第一版試作基準，需經實際試菜校正）",
+                    "to_testing": all(line["quantity"] for line in sauce_lines),
+                    "version": version(
+                        ["批次產量與每份用量還沒有量，試做後再記錄。"],
+                        sauce_lines,
+                        numbered_steps(row.get("醬料做法"), r"STEP\s*\d+\s*[：:]"),
+                        batch_output_unit="g",
+                        serving_unit="g",
+                    ),
+                }
+            )
+            lines.append(component_line(sauce, {"quantity": None, "unit": "g", "note": ""}, "醬料", "每份用量待測"))
+
+        steps = []
+        method = str(row.get("第一版建議作法") or "")
+        prep_block = cell_lines(method.split("前置：")[0])
+        if prep_block:
+            title = prep_block[0] if not is_material_line(prep_block[0]) else ""
+            body = prep_block[1:] if title else prep_block
+            # 一行一項、有克重的當作用料；其餘（舒肥溫度、整段醃料說明）留在步驟
+            protein = "蛋白質" in title
+            others = []
+            for raw in body:
+                if protein and is_material_line(raw):
+                    lines.append(ingredient_line(parse_material(raw), registry, "蛋白質"))
+                else:
+                    others.append(raw)
+            if others:
+                steps.append({"instruction": chr(10).join([f"{title or '前置作業'}：", *others])})
+        for label in ["前置", "出餐"]:
+            m = re.search(rf"(?:^|\n)\s*{label}：(.*?)(?=\n\s*(?:前置|出餐)：|$)", method, re.S)
+            content = clean(m.group(1).replace("\n", " ")) if m else ""
+            if content:
+                steps.append({"instruction": f"{label}：{content}"})
+
+        std = noodle_standard.get("湯麵" if "湯" in category else "乾拌麵", "")
+        for line in lines:
+            if line.get("ingredient") == "生麵條" and line["quantity"] and std:
+                if str(line["quantity"]) not in re.findall(r"(\d+)\s*g", std):
+                    notes.append(f"麵量待確認：菜單食譜寫生麵 {line['quantity']} g，《單份標準》寫「{std}」。")
+        for extra in ["試菜結果", "調整方向", "下一輪？", "建議售價", "成本／份", "SOP 編號"]:
+            if row.get(extra):
+                notes.append(f"{extra}：{clean(row[extra])}")
+
+        dishes.append(
+            {
+                "name": name,
+                "type": "dish",
+                "menu_category": category,
+                "description": "基準版（第一版試作基準，需經實際試菜校正）",
+                "to_testing": False,
+                "version": version(notes, lines, steps, serving_qty=None, serving_unit="g"),
+            }
+        )
+    return dishes, sauces
 
 
 def build_soups(ws, registry: Registry, dishes: list[dict]) -> list[dict]:
-    rows = [[c.value for c in r] for r in ws.iter_rows(min_row=5)]
-    soups: dict[str, dict] = {}
-    for soup, part, qty, unit, process, heat, storage, observe in rows:
-        if not soup:
+    soups = []
+    for row in rows_as_dicts(ws):
+        name = clean(row.get("湯底"))
+        if not name:
             continue
-        key = "上湯" if str(soup).startswith("上湯") else "魚高湯"
-        s = soups.setdefault(key, {"lines": [], "steps": [], "storage": "", "observe": [], "output": None, "yield_note": ""})
-        if observe:
-            s["observe"].append(f"{part}：{observe}")
-        if storage and "成品" not in str(storage):
-            s["storage"] = clean(storage)
-        elif storage:
-            s["yield_note"] = clean(storage)
-        process_text = clean(process)
-        heat_text = clean(heat)
-        if part == "過濾與定量":
-            m = re.search(r"\d+", str(qty))
-            s["output"] = int(m.group()) if m else None
-            s["steps"].append(
-                {
-                    "instruction": f"過濾與定量：{process_text}",
-                    "is_critical": True,
-                    "critical_note": "快速冷卻：2 小時內降至 21°C 以下，再 4 小時內降至 5°C 以下",
-                }
-            )
-            continue
-        # 「薑片／蔥白 120 g」製程欄寫「薑 80 g、蔥白 40 g」→ 拆成兩行
-        split = re.findall(r"(薑|蔥白)\s*(\d+)\s*g", process_text)
-        if split:
-            for name, amount in split:
-                canonical, prep = registry.resolve(name, "g")
-                s["lines"].append({"ingredient": canonical, "quantity": int(amount), "unit": "g", "prep_note": prep, "group_label": ""})
-        else:
-            canonical, prep = registry.resolve(clean(part), unit)
-            s["lines"].append({"ingredient": canonical, "quantity": qty, "unit": unit, "prep_note": prep, "group_label": ""})
-        s["steps"].append({"instruction": f"{clean(part)}：{process_text}" + (f"（{heat_text}）" if heat_text else "")})
-
-    recipes = []
-    for key, s in soups.items():
-        name = SOUP_COMPONENTS[key]
-        hours, hours_text = parse_shelf_life(s["storage"])
+        lines = [ingredient_line(parse_material(raw), registry, "") for raw in cell_lines(row.get("原料／階段"))]
         # 每份量：菜品引用這個湯底時最常用的量
         usages = Counter(
             line["quantity"]
@@ -224,134 +291,94 @@ def build_soups(ws, registry: Registry, dishes: list[dict]) -> list[dict]:
             if line.get("component") == name and line["quantity"]
         )
         serving = usages.most_common(1)[0][0] if usages else None
-        notes = ["試作觀察重點：", *[f"・{o}" for o in s["observe"]]]
-        if s["yield_note"]:
-            notes.append(f"成品說明：{s['yield_note']}")
+        notes = []
+        for label in ["製成時間", "預估成品／保存", "試作觀察", "採購金額"]:
+            if clean(row.get(label)):
+                notes.append(f"{label}：{clean(str(row[label]).replace(chr(10), '；'))}")
         if serving:
             others = "、".join(f"{q} ml" for q in sorted(usages) if q != serving)
             notes.append(f"每份量暫以菜品最常用的 {serving} ml 計" + (f"；其他菜品用量：{others}" if others else "") + "。")
-        if hours:
-            notes.append(f"保存期限：原表建議 {hours_text} 小時內用畢，系統暫記 {hours} 小時。")
-        recipes.append(
+        liters = re.search(r"約\s*(\d+(?:\.\d+)?)\s*L", str(row.get("預估成品／保存") or ""))
+        soups.append(
             {
                 "name": name,
+                "previous_names": RENAMED.get(name, []),
                 "type": "component",
                 "component_kind": "soup",
-                "description": "基準版：約 10 L 成品批次（第一版試作基準，需經實際試菜校正）",
-                "to_testing": True,
-                "version": {
-                    "title": "基準版",
-                    "change_note": "由《餐廳菜單_完整試作與配方表》匯入",
-                    "batch_output_qty": s["output"],
-                    "batch_output_unit": "ml",
-                    "serving_qty": serving,
-                    "serving_unit": "ml",
-                    "storage_method": s["storage"],
-                    "shelf_life_hours": hours,
-                    "notes": "\n".join(notes),
-                    "lines": s["lines"],
-                    "steps": s["steps"],
-                },
-            }
-        )
-    return recipes
-
-
-def build_dishes(ws, standard_ws, registry: Registry) -> list[dict]:
-    header = [clean(c.value) for c in ws[4]]
-    noodle_standard = {}
-    for r in standard_ws.iter_rows(min_row=5, values_only=True):
-        if r[0]:
-            noodle_standard[clean(r[0])] = clean(r[1])
-
-    recipes = []
-    for r in ws.iter_rows(min_row=5, values_only=True):
-        if not r[1]:
-            continue
-        row = dict(zip(header, r))
-        category = clean(row["分類"])
-        name = clean(row["原菜名"])
-        lines = []
-        for col in ["基底湯／液體", "蛋白質", "蔬菜／配料", "香料／辛香料", "油脂", "Sauce／調味", "麵量"]:
-            for raw in split_items(row.get(col)):
-                lines.append(line_for(parse_item(raw), registry, GROUP_LABEL[col]))
-
-        steps = []
-        method = str(row.get("第一版建議作法") or "")
-        for label in ["前置", "出餐"]:
-            m = re.search(rf"{label}：(.*?)(?=\n\s*(?:前置|出餐)：|$)", method, re.S)
-            content = clean(m.group(1)) if m else ""
-            if content:
-                steps.append({"instruction": f"{label}：{content}"})
-
-        notes = []
-        std = noodle_standard.get("湯麵" if "湯" in category else "乾拌麵", "")
-        for line in lines:
-            if line.get("ingredient") == "生麵條" and line["quantity"] and std:
-                if str(line["quantity"]) not in re.findall(r"(\d+)\s*g", std):
-                    notes.append(f"麵量待確認：菜單試作表寫生麵 {line['quantity']} g，《單份標準》寫「{std}」。")
-        for extra in ["試菜結果", "調整方向", "下一輪？", "建議售價", "成本／份", "SOP 編號"]:
-            if row.get(extra):
-                notes.append(f"{extra}：{clean(row[extra])}")
-
-        recipes.append(
-            {
-                "name": name,
-                "type": "dish",
-                "menu_category": category,
                 "description": "基準版（第一版試作基準，需經實際試菜校正）",
-                "to_testing": False,
-                "version": {
-                    "title": "基準版",
-                    "change_note": "由《餐廳菜單_完整試作與配方表》匯入",
-                    "serving_qty": None,
-                    "serving_unit": "g",
-                    "notes": "\n".join(notes),
-                    "lines": lines,
-                    "steps": steps,
-                },
+                "to_testing": bool(lines) and all(line["quantity"] for line in lines),
+                "version": version(
+                    notes,
+                    lines,
+                    numbered_steps(row.get("製程"), r"(?:^|\n)\s*\d+\s*[.．、]"),
+                    batch_output_qty=number(liters.group(1)) * 1000 if liters else None,
+                    batch_output_unit="ml",
+                    serving_qty=serving,
+                    serving_unit="ml",
+                ),
             }
         )
-    return recipes
+    return soups
 
 
-def flag_name_mismatch(dishes: list[dict], registry: Registry) -> None:
-    """菜名提到某個原物料，用料裡卻沒有：多半是複製列之後沒改到"""
-    known = set(registry.items) | set(ALIASES)
-    for dish in dishes:
-        used = [line.get("ingredient") or line.get("component") or "" for line in dish["version"]["lines"]]
-        missing = []
-        for word in sorted(known, key=len, reverse=True):
-            if word not in dish["name"] or any(word in m for m in missing):
-                continue
-            canonical = ALIASES.get(word, (word, ""))[0]
-            if not any(canonical in u or word in u for u in used):
-                missing.append(word)
-        if missing and used:
-            note = f"資料疑點：菜名提到「{'」「'.join(missing)}」，但用料裡沒有，可能是複製列之後沒有改到，請確認。"
-            v = dish["version"]
-            v["notes"] = chr(10).join(x for x in [note, v["notes"]] if x)
+def sheet(wb, *keywords: str):
+    for ws in wb:
+        if all(k in ws.title for k in keywords):
+            return ws
+    raise SystemExit(f"找不到名稱包含「{'」「'.join(keywords)}」的工作表；目前有：{'、'.join(wb.sheetnames)}")
+
+
+def find_xlsx() -> Path:
+    for folder in [ROOT, ROOT / "private", ROOT.parent]:
+        if (folder / XLSX_NAME).exists():
+            return folder / XLSX_NAME
+    raise SystemExit(f"找不到 {XLSX_NAME}（找過專案資料夾、private/、上一層資料夾）")
+
+
+def report_changes(out: Path, recipes: list[dict]) -> None:
+    """和上一次產生的檔案比較，列出新增、移除與內容有變的食譜"""
+    if not out.exists():
+        return
+    try:
+        old = {r["name"]: r for r in json.loads(out.read_text(encoding="utf-8"))["recipes"]}
+    except (ValueError, KeyError):
+        return
+    new = {r["name"]: r for r in recipes}
+
+    def content(r: dict) -> dict:
+        v = r["version"]
+        return {"lines": v["lines"], "steps": v["steps"], "category": r.get("menu_category")}
+
+    print("和上一次的檔案比較：")
+    print("  新增：" + ("、".join(n for n in new if n not in old) or "無"))
+    print("  不在新表裡：" + ("、".join(n for n in old if n not in new) or "無"))
+    print("  內容有變：" + ("、".join(n for n in new if n in old and content(new[n]) != content(old[n])) or "無"))
 
 
 def main() -> None:
-    xlsx = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_XLSX
+    xlsx = Path(sys.argv[1]) if len(sys.argv) > 1 else find_xlsx()
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_OUT
     wb = openpyxl.load_workbook(xlsx, data_only=True)
     registry = Registry()
-    dishes = build_dishes(wb["菜單試作表"], wb["單份標準"], registry)
-    soups = build_soups(wb["基底湯食譜"], registry, dishes)
-    flag_name_mismatch(dishes, registry)
-    recipes = soups + dishes
+    soup_ws = sheet(wb, "基", "湯", "食譜")
+    soup_names = [clean(r.get("湯底")) for r in rows_as_dicts(soup_ws) if clean(r.get("湯底"))]
+    dishes, sauces = build_dishes(sheet(wb, "菜單"), sheet(wb, "單份標準"), registry, soup_names)
+    soups = build_soups(soup_ws, registry, dishes)
+    recipes = soups + sauces + dishes
     data = {
         "source": xlsx.name,
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "ingredients": sorted(registry.items.values(), key=lambda x: (x["category"], x["name"])),
         "recipes": recipes,
     }
+    report_changes(out, recipes)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"輸出 {out}")
-    print(f"原物料 {len(registry.items)} 項、元件 {len(soups)} 個、菜品 {len(dishes)} 道")
+    print(f"原物料 {len(registry.items)} 項、湯底 {len(soups)} 個、醬料 {len(sauces)} 個、菜品 {len(dishes)} 道")
+    pending = [r["name"] for r in soups + sauces if not r["to_testing"]]
+    if pending:
+        print("用量還沒填齊、不會自動送試菜的元件：" + "、".join(pending))
 
 
 if __name__ == "__main__":

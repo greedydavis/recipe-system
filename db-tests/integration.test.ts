@@ -196,6 +196,157 @@ describe('基準版匯入', () => {
     await expectError(t.rpc(t.users.chef, 'import_baseline', { p_file: file }), '權限不足');
   });
 
+  it('配方表更新後重新匯入：有新內容才多一個草案版本，舊版本不變；可以改名；重複匯入不會再多版本', async () => {
+    const ingredients = ['更新骨', '更新麵', '更新肉'].map((name) => ({ name, category: 'other', base_dimension: 'mass' }));
+    const first = {
+      source: '舊表',
+      generated_at: '2026-09-17T00:00:00Z',
+      ingredients,
+      recipes: [
+        {
+          name: '更新舊湯',
+          type: 'component',
+          component_kind: 'soup',
+          to_testing: true,
+          version: {
+            title: '基準版',
+            batch_output_qty: 10000,
+            batch_output_unit: 'ml',
+            lines: [{ ingredient: '更新骨', quantity: 1000, unit: 'g' }],
+            steps: [{ instruction: '熬' }],
+          },
+        },
+        {
+          name: '更新菜',
+          type: 'dish',
+          version: {
+            title: '基準版',
+            lines: [
+              { component: '更新舊湯', quantity: 300, unit: 'ml' },
+              { ingredient: '更新麵', quantity: 90, unit: 'g' },
+            ],
+            steps: [],
+          },
+        },
+        {
+          name: '不變菜',
+          type: 'dish',
+          version: {
+            title: '基準版',
+            lines: [
+              { ingredient: '更新麵', quantity: 90, unit: 'g' },
+              { ingredient: '更新肉', quantity: null, unit: 'g' },
+            ],
+            steps: [],
+          },
+        },
+      ],
+    };
+    await t.rpc(t.users.founder, 'import_baseline', { p_file: first });
+
+    const second = {
+      source: '新表',
+      generated_at: '2026-10-12T00:00:00Z',
+      ingredients,
+      recipes: [
+        {
+          name: '更新新湯',
+          previous_names: ['更新舊湯'],
+          type: 'component',
+          component_kind: 'soup',
+          to_testing: false,
+          version: {
+            title: '基準版',
+            lines: [
+              { ingredient: '更新骨', quantity: null, unit: 'g', prep_note: '1 隻' },
+              { ingredient: '更新肉', quantity: 250, unit: 'g' },
+            ],
+            steps: [{ instruction: '炸' }, { instruction: '熬' }],
+          },
+        },
+        {
+          name: '更新待填醬',
+          type: 'component',
+          component_kind: 'sauce',
+          to_testing: false,
+          version: { title: '基準版', lines: [{ ingredient: '更新肉', quantity: null, unit: 'g' }], steps: [] },
+        },
+        {
+          name: '更新菜',
+          type: 'dish',
+          version: {
+            title: '基準版',
+            lines: [
+              { component: '更新新湯', quantity: 300, unit: 'ml' },
+              { ingredient: '更新麵', quantity: 90, unit: 'g' },
+              { ingredient: '更新肉', quantity: 180, unit: 'g' },
+            ],
+            steps: [{ instruction: '出餐：煎香' }],
+          },
+        },
+        // 新表只是少了一行：不算新內容
+        { name: '不變菜', type: 'dish', version: { title: '基準版', lines: [{ ingredient: '更新麵', quantity: 90, unit: 'g' }], steps: [] } },
+        {
+          name: '更新新菜',
+          type: 'dish',
+          version: {
+            title: '基準版',
+            lines: [
+              { component: '更新待填醬', quantity: null, unit: 'g' },
+              { ingredient: '更新麵', quantity: 90, unit: 'g' },
+            ],
+            steps: [],
+          },
+        },
+      ],
+    };
+    type Result = { created_recipes: number; updated_recipes: number; skipped_recipes: number; changes: string[]; warnings: string[] };
+    const result = await t.rpc<Result>(t.users.founder, 'import_baseline', { p_file: second });
+    expect(result).toMatchObject({ created_recipes: 2, updated_recipes: 2, skipped_recipes: 1 });
+    expect(result.changes).toEqual([
+      '「更新舊湯」改名為「更新新湯」',
+      '「更新新湯」新增 v2 草案（v1 保留不變）',
+      '「更新菜」新增 v2 草案（v1 保留不變）',
+    ]);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain('「更新新菜」沒有帶入元件「更新待填醬」');
+
+    const versions = (name: string) =>
+      t.sql<{ version_no: number; status: string; based_on: number | null; batch: string | null; lines: string[]; steps: string[] }>(
+        `select v.version_no, v.status, b.version_no as based_on, v.batch_output_qty::text as batch,
+                coalesce((select array_agg(coalesce(i.name, cr.name || ' v' || cv.version_no) || ' ' || coalesce(l.quantity::text, '待填')
+                                           order by l.sort_order)
+                          from app.recipe_lines l
+                          left join app.ingredients i on i.id = l.ingredient_id
+                          left join app.recipe_versions cv on cv.id = l.component_version_id
+                          left join app.recipes cr on cr.id = cv.recipe_id
+                          where l.version_id = v.id), '{}') as lines,
+                coalesce((select array_agg(s.instruction order by s.step_no) from app.recipe_steps s where s.version_id = v.id), '{}') as steps
+         from app.recipes r
+         join app.recipe_versions v on v.recipe_id = r.id
+         left join app.recipe_versions b on b.id = v.based_on_version_id
+         where r.name = $1
+         order by v.version_no`,
+        [name],
+      );
+    expect(await versions('更新舊湯')).toEqual([]);
+    expect(await versions('更新新湯')).toEqual([
+      { version_no: 1, status: 'testing', based_on: null, batch: '10000', lines: ['更新骨 1000'], steps: ['熬'] },
+      // 檔案沒有填產量：沿用上一版量到的結果
+      { version_no: 2, status: 'draft', based_on: 1, batch: '10000', lines: ['更新骨 待填', '更新肉 250'], steps: ['炸', '熬'] },
+    ]);
+    // 菜品的新草案引用得到的還是已凍結的 v1（v2 是草案，不能引用）
+    expect(await versions('更新菜')).toEqual([
+      { version_no: 1, status: 'draft', based_on: null, batch: null, lines: ['更新新湯 v1 300', '更新麵 90'], steps: [] },
+      { version_no: 2, status: 'draft', based_on: 1, batch: null, lines: ['更新新湯 v1 300', '更新麵 90', '更新肉 180'], steps: ['出餐：煎香'] },
+    ]);
+    expect(await versions('不變菜')).toHaveLength(1);
+    expect((await versions('更新新菜'))[0].lines).toEqual(['更新麵 90']);
+
+    const again = await t.rpc<Result>(t.users.founder, 'import_baseline', { p_file: second });
+    expect(again).toMatchObject({ created_recipes: 0, updated_recipes: 0, skipped_recipes: 5, changes: [] });
+  });
+
   it('任一筆資料無法解析時，整個匯入交易都會回復', async () => {
     await expectError(
       t.rpc(t.users.founder, 'import_baseline', {

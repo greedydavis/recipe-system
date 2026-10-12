@@ -194,7 +194,7 @@ POS 串接；向供應商下單與採購流程；排班、薪資、會計；外�
 - 介面文字一律使用繁體中文（台灣用語）；程式識別字、資料表、enum 值用英文。
 - commit 訊息用繁體中文。
 - **repo 是公開的，repo 內不能出現真實的食譜配方、克重、比例、進價或供應商聯絡資料**；文件舉例時也不要寫真實菜名與份量。seed 資料、測試資料、截圖一律使用虛構資料。使用者已同意 `scripts/import_baseline.py` 裡的原物料名稱與別名清單公開。
-- 真實菜單只放在 `private/`（已列入 .gitignore）：`npm run seed:baseline` 讀取上一層資料夾的《餐廳菜單_完整試作與配方表.xlsx》，產生 `private/baseline-seed.json`，再到「更多 → 資料匯出與匯入」匯入。`vite build` 不會打包 `private/`；修改匯入流程後要確認 `dist/` 裡搜尋不到菜名。
+- 真實菜單只放在 `private/`（已列入 .gitignore）：`npm run seed:baseline` 讀取《菜單配方表.xlsx》（放在專案資料夾、`private/` 或上一層資料夾；專案資料夾的 `*.xlsx` 已列入 .gitignore），產生 `private/baseline-seed.json`，再到「更多 → 資料匯出與匯入」匯入。配方表更新後可以重新匯入：已存在的食譜只有在配方表多了新內容時才新增草案版本，不覆蓋舊版、不刪除也不封存。`vite build` 不會打包 `private/`；修改匯入流程後要確認 `dist/` 裡搜尋不到菜名。
 - 金鑰只能放 anon key；service role key 不能出現在前端或 repo。
 - 手機操作：點擊區至少 44px；數字欄位使用 `inputmode="decimal"`；主要動作放在畫面底部固定列；不依賴 hover。
 - Vercel 帳號目前沒有建立專案的權限，部署先不要用 Vercel（見 SPEC §5.5）。

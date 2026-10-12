@@ -391,10 +391,10 @@ export function DataPage() {
         </Card>
       </Section>
 
-      <Section title="匯入基準版菜單">
+      <Section title="匯入菜單配方表">
         <Card className="space-y-3">
           <p className="text-sm text-muted">
-            匯入由 <code>scripts/import_baseline.py</code> 從《餐廳菜單_完整試作與配方表》產生的 JSON。已存在的同名原物料與食譜會略過，不會覆蓋。
+            匯入由 <code>scripts/import_baseline.py</code> 從《菜單配方表》產生的 JSON。配方表更新後可以重新匯入：已存在的食譜只有在配方表多了新內容時才會多一個草案版本，舊版本不會被覆蓋；配方表裡拿掉的菜不會被刪除。
           </p>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" loading={busy} onClick={() => fileInput.current?.click()}>
