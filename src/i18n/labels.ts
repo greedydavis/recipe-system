@@ -107,6 +107,7 @@ export const TABLE_LABEL: Record<string, string> = {
   tasting_items: '試做項目',
   tasting_feedback: '試吃評分',
   photos: '照片',
+  schedule_tasks: '開店時間表',
 };
 
 export const ACTION_LABEL: Record<string, string> = {

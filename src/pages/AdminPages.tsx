@@ -40,6 +40,7 @@ export function MorePage() {
   });
 
   const links: Array<{ to: string; label: string; show: boolean }> = [
+    { to: '/schedule', label: '開店時間表（裝潢、設備等前置作業的排程）', show: can.viewKitchen(me.role) },
     { to: '/progress', label: '籌備進度（各分類定版進度、卡關清單、成本總覽）', show: can.viewKitchen(me.role) },
     { to: '/suppliers', label: '供應商', show: can.editMaster(me.role) },
     { to: '/admin/users', label: '帳號與角色', show: can.admin(me.role) },

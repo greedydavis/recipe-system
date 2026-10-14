@@ -118,3 +118,38 @@ test('測試人員評分：只看到指派給自己的項目', async ({ page }) 
   await page.getByRole('button', { name: '送出評分' }).click();
   await expect(page.getByRole('link', { name: /招牌湯麵（示範）/ })).toContainText('已評 4 分');
 });
+
+test('開店時間表：新增項目、拖拉改日期', async ({ page }) => {
+  await loginAs(page, '示範創辦人');
+  await page.getByRole('link', { name: /開店時間表/ }).click();
+  await expect(page.getByRole('heading', { name: '開店時間表', level: 1 })).toBeVisible();
+
+  await page.getByRole('button', { name: '新增' }).click();
+  const sheet = page.getByRole('dialog');
+  await sheet.getByLabel('項目名稱').fill('E2E 招牌安裝');
+  await sheet.getByLabel('分類').fill('裝潢');
+  await sheet.getByLabel('開始日期').fill('2026-09-08');
+  await sheet.getByLabel('結束日期').fill('2026-09-10');
+  await expect(sheet.getByText('共 3 天')).toBeVisible();
+  await sheet.getByRole('button', { name: '儲存' }).click();
+  const bar = page.getByRole('button', { name: /^E2E 招牌安裝 9\/8–9\/10（3 天）/ });
+  await expect(bar).toBeVisible();
+
+  // 手機預設不能拖（避免捲動時誤觸）；開啟「拖拉調整」後往右拖 2 天
+  await page.getByRole('button', { name: '拖拉調整' }).click();
+  await bar.scrollIntoViewIfNeeded();
+  const box = (await bar.boundingBox())!;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + box.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 26, y, { steps: 3 });
+  await page.mouse.move(box.x + box.width / 2 + 52, y, { steps: 3 });
+  await page.mouse.up();
+  await expect(page.getByRole('button', { name: /^E2E 招牌安裝 9\/10–9\/12（3 天）/ })).toBeVisible();
+
+  await expect(page.getByText('「E2E 招牌安裝」改為 9/10–9/12（3 天）')).toBeVisible();
+
+  // 重新整理後還在：已經存進資料庫
+  await page.reload();
+  await expect(page.getByRole('button', { name: /^E2E 招牌安裝 9\/10–9\/12（3 天）/ })).toBeVisible({ timeout: 60_000 });
+});

@@ -162,4 +162,16 @@ export async function seedDemoData(api: SeedApi): Promise<void> {
     p_to: 'locked',
     p_comment: '湯頭清爽，定版',
   });
+
+  // 開店時間表（虛構的排程）
+  const schedule: Array<[string, string, string, string, boolean?]> = [
+    ['店面簽約與丈量（示範）', '證照與行政', '2026-09-01', '2026-09-07', true],
+    ['水電配管（示範）', '裝潢', '2026-09-10', '2026-09-24'],
+    ['木作與油漆（示範）', '裝潢', '2026-09-25', '2026-10-20'],
+    ['廚房設備進場（示範）', '設備', '2026-10-15', '2026-10-22'],
+    ['員工招募與訓練（示範）', '人事', '2026-10-12', '2026-11-08'],
+  ];
+  for (const [name, category, start_date, end_date, is_done] of schedule) {
+    await api.rpcAs(founder, 'upsert_schedule_task', { p: { name, category, start_date, end_date, is_done: !!is_done } });
+  }
 }

@@ -24,6 +24,17 @@ export interface TeamMember {
   role: Role;
 }
 
+/** 開店時間表的一個項目；結束日含當天 */
+export interface ScheduleTask {
+  id: string;
+  name: string;
+  category: string;
+  start_date: string;
+  end_date: string;
+  is_done: boolean;
+  note: string;
+}
+
 export interface Profile extends TeamMember {
   is_active: boolean;
   created_at: string;

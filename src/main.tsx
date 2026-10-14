@@ -16,6 +16,7 @@ import { IngredientDetailPage, IngredientsPage, SupplierDetailPage, SuppliersPag
 import { LoginPage, PendingPage } from './pages/LoginPage';
 import { RecipeDetailPage } from './pages/RecipeDetailPage';
 import { RecipesPage } from './pages/RecipesPage';
+import { SchedulePage } from './pages/SchedulePage';
 import { FeedbackPage, TastingNewPage, TastingSessionPage, TastingsPage } from './pages/TastingPages';
 import { VersionEditPage } from './pages/VersionEditPage';
 import { VersionPage } from './pages/VersionPage';
@@ -69,6 +70,7 @@ const router = createHashRouter([
         children: [
           { index: true, element: <HomePage /> },
           { path: 'progress', element: guard(KITCHEN, <ProgressPage />) },
+          { path: 'schedule', element: guard(KITCHEN, <SchedulePage />) },
           { path: 'recipes', element: guard(KITCHEN, <RecipesPage />) },
           { path: 'recipes/:id', element: guard(KITCHEN, <RecipeDetailPage />) },
           { path: 'versions/:id', element: guard(KITCHEN, <VersionPage />) },

@@ -3,12 +3,13 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { ProgressSummary } from '../app/progress';
 import { useProgress } from '../app/useProgress';
-import { formatDateTime } from '../app/format';
+import { formatDateTime, todayIso } from '../app/format';
 import { useMe } from '../app/auth';
-import { Card, EmptyState, ErrorState, Loading, Section, StatusBadge } from '../components/ui';
+import { Badge, Card, EmptyState, ErrorState, Loading, Section, StatusBadge } from '../components/ui';
 import { useRpc } from '../data/api';
-import type { Dashboard, MyTastingTask } from '../data/types';
+import type { Dashboard, MyTastingTask, ScheduleTask } from '../data/types';
 import { formatPercent } from '../domain/format';
+import { taskState } from '../domain/schedule';
 import { ROLE_LABEL } from '../i18n/labels';
 import { TastingTaskCard } from './TastingPages';
 
@@ -50,6 +51,35 @@ function MyTasks({ tasks, loading }: { tasks?: MyTastingTask[]; loading: boolean
   );
 }
 
+/** 開店時間表的摘要：正在進行與逾期的項目 */
+function ScheduleCard() {
+  const tasks = useRpc<ScheduleTask[]>('list_schedule_tasks');
+  if (!tasks.data) return null;
+  const today = todayIso();
+  const states = tasks.data.map((t) => ({ task: t, state: taskState(t, today) }));
+  const active = states.filter((s) => s.state === 'active');
+  const overdue = states.filter((s) => s.state === 'overdue');
+  const names = [...overdue, ...active].slice(0, 3).map((s) => s.task.name);
+  return (
+    <Link to="/schedule" className="block">
+      <Card className="flex items-center gap-3 hover:bg-brand-50">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 font-semibold">
+            開店時間表
+            {overdue.length > 0 && <Badge tone="danger">逾期 {overdue.length}</Badge>}
+          </div>
+          <div className="truncate text-sm text-muted">
+            {tasks.data.length === 0
+              ? '還沒有項目；點進去安排裝潢、設備等前置作業'
+              : `進行中 ${active.length} 項${names.length > 0 ? `：${names.join('、')}` : ''}`}
+          </div>
+        </div>
+        <ChevronRight className="size-5 shrink-0 text-stone-400" aria-hidden />
+      </Card>
+    </Link>
+  );
+}
+
 function ProgressCard({ summary }: { summary: ProgressSummary }) {
   if (summary.dishes.total === 0) return null;
   const pct = Math.round((summary.dishes.locked / summary.dishes.total) * 100);
@@ -83,6 +113,7 @@ function KitchenDashboard({ data }: { data: Dashboard }) {
 
   return (
     <div className="space-y-6">
+      <ScheduleCard />
       {!progress.isLoading && <ProgressCard summary={progress.summary} />}
       <div className="grid grid-cols-3 gap-2">
         <Stat label="待核准" value={data.pending_approvals?.length ?? 0} target="pending" />
