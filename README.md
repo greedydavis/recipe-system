@@ -102,6 +102,15 @@ GitHub repo → **Settings → Secrets and variables → Actions → Variables**
 3. 用手機開啟網站，上傳一張試做照片，確認照片可以看到
 4. 請其他成員註冊，由創辦人指派角色
 
+### 忘記密碼（重設密碼信）
+
+登入頁的「忘記密碼？」會由 Supabase 寄出重設密碼信，信裡的連結回到網站後設定新密碼（`src/app/authRedirect.ts` 先把網址裡的 token 取出來，避免和 `#` 路由衝突）。要能用，Supabase 後台要設定：
+
+1. Authentication → URL Configuration：**Site URL** 填網站網址，**Redirect URLs** 加上同一個網址
+2. Authentication → Emails → SMTP Settings：設定自己的寄信服務。Supabase 內建的寄信只會寄給專案成員，而且每小時只有幾封，團隊其他人收不到
+
+已登入的人可以在「更多 → 我的帳號 → 修改密碼」直接改。
+
 ## 之後的資料庫更新
 
 已上線的專案不要再執行 `setup-all.sql`。有新的 migration 時：

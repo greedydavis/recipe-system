@@ -72,6 +72,7 @@ export function MorePage() {
               </div>
             )}
           </Field>
+          {backend?.mode === 'supabase' && <ChangePassword />}
           <Button variant="secondary" block onClick={() => backend?.signOut()}>
             {backend?.mode === 'demo' ? '切換示範帳號' : '登出'}
           </Button>
@@ -103,6 +104,57 @@ export function MorePage() {
           </Card>
         </Section>
       )}
+    </div>
+  );
+}
+
+function ChangePassword() {
+  const { backend } = useAuth();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const change = useAction(async () => {
+    if (password.length < 8) throw new Error('密碼至少 8 個字元');
+    if (password !== confirmPassword) throw new Error('兩次輸入的密碼不一樣');
+    await backend!.updatePassword(password);
+  });
+  if (!open) {
+    return (
+      <Button variant="secondary" block onClick={() => setOpen(true)}>
+        修改密碼
+      </Button>
+    );
+  }
+  return (
+    <div className="space-y-3 rounded-xl bg-stone-50 p-3">
+      <Field label="新密碼" hint="至少 8 個字元">
+        {(id) => <Input id={id} type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />}
+      </Field>
+      <Field label="再輸入一次">
+        {(id) => <Input id={id} type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />}
+      </Field>
+      <div className="flex gap-2">
+        <Button variant="secondary" onClick={() => setOpen(false)}>
+          取消
+        </Button>
+        <Button
+          className="flex-1"
+          loading={change.isPending}
+          onClick={() =>
+            change.mutate(undefined, {
+              onSuccess: () => {
+                toast('已修改密碼');
+                setPassword('');
+                setConfirmPassword('');
+                setOpen(false);
+              },
+            })
+          }
+        >
+          儲存新密碼
+        </Button>
+      </div>
     </div>
   );
 }

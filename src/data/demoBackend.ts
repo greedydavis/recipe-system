@@ -174,6 +174,7 @@ export async function createDemoBackend(): Promise<Backend> {
 
   return {
     mode: 'demo',
+    recovery: null,
 
     async getSession() {
       if (!userId) return null;
@@ -212,6 +213,14 @@ export async function createDemoBackend(): Promise<Backend> {
       userId = null;
       writeSession(null);
       notify();
+    },
+
+    async requestPasswordReset() {
+      throw new RpcError('示範模式沒有密碼，直接點上方的示範帳號登入');
+    },
+
+    async updatePassword() {
+      throw new RpcError('示範模式沒有密碼，不需要修改');
     },
 
     rpc<T>(fn: string, args?: Record<string, unknown>) {

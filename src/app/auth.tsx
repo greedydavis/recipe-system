@@ -10,6 +10,9 @@ interface AuthState {
   me: Me | null;
   loading: boolean;
   error: string | null;
+  /** 從重設密碼信點進來，還沒設定新密碼 */
+  recovery: { error: string | null } | null;
+  finishRecovery(): void;
   refresh(): Promise<void>;
 }
 
@@ -22,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [recovery, setRecovery] = useState<AuthState['recovery']>(null);
   const currentUserId = useRef<string | null>(null);
 
   const load = useCallback(async (b: Backend) => {
@@ -38,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(async (b) => {
         if (cancelled) return;
         setBackend(b);
+        setRecovery(b.recovery);
         await load(b);
         unsubscribe = b.onAuthChange((userId) => {
           // Supabase 每小時更新 token、切回分頁時也會通知；同一個人就不要清掉畫面資料（正在編輯的內容會不見）
@@ -60,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [backend, load]);
 
   return (
-    <AuthContext.Provider value={{ backend, session, me, loading, error, refresh }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ backend, session, me, loading, error, recovery, finishRecovery: () => setRecovery(null), refresh }}>{children}</AuthContext.Provider>
   );
 }
 

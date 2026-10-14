@@ -25,6 +25,12 @@ export interface Backend {
   signIn(email: string, password: string): Promise<void>;
   signUp(email: string, password: string, displayName: string): Promise<void>;
   signOut(): Promise<void>;
+  /** 寄出重設密碼信；不論 Email 有沒有註冊都不透露 */
+  requestPasswordReset(email: string): Promise<void>;
+  /** 修改目前登入者的密碼（包含從重設密碼信點進來的時候） */
+  updatePassword(password: string): Promise<void>;
+  /** 這次是從重設密碼信的連結打開：error 有值代表連結失效 */
+  recovery: { error: string | null } | null;
   rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T>;
   uploadPhoto(path: string, file: Blob): Promise<void>;
   photoUrl(path: string): Promise<string>;

@@ -3,6 +3,7 @@ import { type ReactNode, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Navigate, Outlet, RouterProvider, createHashRouter } from 'react-router';
 import { AuthProvider, useAuth } from './app/auth';
+import { captureAuthRedirect } from './app/authRedirect';
 import { Layout, RequireRole } from './app/Layout';
 import { Loading, Notice, ToastProvider } from './components/ui';
 import type { Role } from './domain/types';
@@ -13,7 +14,7 @@ import { ComparePage } from './pages/ComparePage';
 import { HomePage } from './pages/HomePage';
 import { ProgressPage } from './pages/ProgressPage';
 import { IngredientDetailPage, IngredientsPage, SupplierDetailPage, SuppliersPage } from './pages/IngredientPages';
-import { LoginPage, PendingPage } from './pages/LoginPage';
+import { LoginPage, PendingPage, ResetPasswordPage } from './pages/LoginPage';
 import { RecipeDetailPage } from './pages/RecipeDetailPage';
 import { RecipesPage } from './pages/RecipesPage';
 import { SchedulePage } from './pages/SchedulePage';
@@ -28,7 +29,7 @@ const queryClient = new QueryClient({
 });
 
 function Gate() {
-  const { loading, error, session, me } = useAuth();
+  const { loading, error, session, me, recovery } = useAuth();
   if (loading) {
     return (
       <Loading
@@ -49,6 +50,7 @@ function Gate() {
       </div>
     );
   }
+  if (recovery) return <ResetPasswordPage />;
   if (!session) return <LoginPage />;
   if (!me || me.role === 'pending' || !me.is_active) return <PendingPage />;
   return <Outlet />;
@@ -60,6 +62,9 @@ const KITCHEN: Role[] = ['founder', 'chef', 'manager'];
 function guard(roles: Role[], element: ReactNode) {
   return <RequireRole roles={roles}>{element}</RequireRole>;
 }
+
+// 一定要在建立路由之前：重設密碼信的 token 放在網址 # 後面，路由會把它當成頁面路徑
+captureAuthRedirect();
 
 const router = createHashRouter([
   {

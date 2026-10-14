@@ -7,7 +7,8 @@ import { ROLE_LABEL } from '../i18n/labels';
 export function LoginPage() {
   const { backend } = useAuth();
   const toast = useToast();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
+  const [resetSent, setResetSent] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -27,6 +28,10 @@ export function LoginPage() {
     try {
       if (mode === 'signin') {
         await backend.signIn(email, password);
+      } else if (mode === 'forgot') {
+        if (!email.trim()) throw new Error('請填寫 Email');
+        await backend.requestPasswordReset(email);
+        setResetSent(true);
       } else {
         if (!name.trim()) throw new Error('請填寫姓名');
         if (password.length < 8) throw new Error('密碼至少 8 個字元');
@@ -70,7 +75,10 @@ export function LoginPage() {
 
       <Card>
         <form onSubmit={submit} className="space-y-4">
-          <h2 className="text-lg font-semibold">{mode === 'signin' ? '登入' : '註冊新帳號'}</h2>
+          <h2 className="text-lg font-semibold">{mode === 'signin' ? '登入' : mode === 'signup' ? '註冊新帳號' : '忘記密碼'}</h2>
+          {mode === 'forgot' && (
+            <p className="text-sm text-muted">輸入註冊時用的 Email，系統會寄一封重設密碼的信；點信裡的連結就能設定新密碼。</p>
+          )}
           {mode === 'signup' && (
             <Field label="姓名">{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />}</Field>
           )}
@@ -79,6 +87,7 @@ export function LoginPage() {
               <Input id={id} type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
             )}
           </Field>
+          {mode !== 'forgot' && (
           <Field label="密碼" hint={mode === 'signup' ? '至少 8 個字元' : undefined}>
             {(id) => (
               <Input
@@ -91,10 +100,29 @@ export function LoginPage() {
               />
             )}
           </Field>
+          )}
           {error && <Notice tone="danger">{error}</Notice>}
+          {mode === 'forgot' && resetSent && (
+            <Notice tone="ok" title="已送出">
+              如果這個 Email 有註冊，幾分鐘內會收到重設密碼的信（也看一下垃圾郵件匣）。連結只能用一次，而且有時效。
+            </Notice>
+          )}
           <Button type="submit" block loading={busy}>
-            {mode === 'signin' ? '登入' : '註冊'}
+            {mode === 'signin' ? '登入' : mode === 'signup' ? '註冊' : resetSent ? '再寄一次' : '寄出重設密碼信'}
           </Button>
+          {mode === 'signin' && (
+            <button
+              type="button"
+              className="min-h-11 w-full text-sm text-muted"
+              onClick={() => {
+                setMode('forgot');
+                setError(null);
+                setResetSent(false);
+              }}
+            >
+              忘記密碼？
+            </button>
+          )}
           <button
             type="button"
             className="min-h-11 w-full text-sm text-brand-700"
@@ -103,11 +131,72 @@ export function LoginPage() {
               setError(null);
             }}
           >
-            {mode === 'signin' ? '還沒有帳號？註冊' : '已經有帳號？登入'}
+            {mode === 'signin' ? '還沒有帳號？註冊' : '回到登入'}
           </button>
         </form>
       </Card>
       <p className="mt-4 text-center text-xs text-muted">新註冊的帳號需要創辦人指派角色後才能使用。</p>
+    </div>
+  );
+}
+
+/** 從重設密碼信的連結打開：設定新密碼 */
+export function ResetPasswordPage() {
+  const { backend, recovery, finishRecovery } = useAuth();
+  const toast = useToast();
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!backend) return;
+    setError(null);
+    if (password.length < 8) return setError('密碼至少 8 個字元');
+    if (password !== confirmPassword) return setError('兩次輸入的密碼不一樣');
+    setBusy(true);
+    try {
+      await backend.updatePassword(password);
+      toast('已設定新密碼');
+      finishRecovery();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 py-10">
+      <Card>
+        {recovery?.error ? (
+          <div className="space-y-4">
+            <h1 className="text-lg font-semibold">重設密碼的連結不能用</h1>
+            <Notice tone="danger">{recovery.error}</Notice>
+            <p className="text-sm text-muted">連結只能用一次，而且有時效。請回到登入頁按「忘記密碼？」重新申請。</p>
+            <Button block onClick={finishRecovery}>
+              回到登入頁
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="space-y-4">
+            <h1 className="text-lg font-semibold">設定新密碼</h1>
+            <Field label="新密碼" hint="至少 8 個字元">
+              {(id) => <Input id={id} type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required />}
+            </Field>
+            <Field label="再輸入一次">
+              {(id) => (
+                <Input id={id} type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" required />
+              )}
+            </Field>
+            {error && <Notice tone="danger">{error}</Notice>}
+            <Button type="submit" block loading={busy}>
+              儲存新密碼
+            </Button>
+          </form>
+        )}
+      </Card>
     </div>
   );
 }
