@@ -14,6 +14,8 @@ interface Task {
   category: string;
   start_date: string;
   end_date: string;
+  start_time: string | null;
+  end_time: string | null;
   is_done: boolean;
   note: string;
 }
@@ -57,6 +59,31 @@ describe('開店時間表', () => {
 
     await upsert(t.users.founder, { id: earlier, name: '水電配管', category: '裝潢', start_date: '2026-09-05', end_date: '2026-09-05', is_done: true, note: '' });
     expect((await list()).find((x) => x.id === earlier)).toMatchObject({ is_done: true, end_date: '2026-09-05' });
+  });
+
+  it('時間選填；拖拉只改日期時保留時間；同一天的結束時間不能早於開始時間', async () => {
+    const id = await upsert(t.users.founder, {
+      name: '冷凍櫃進場',
+      start_date: '2026-10-15',
+      end_date: '2026-10-15',
+      start_time: '09:00',
+      end_time: '12:30',
+    });
+    const find = async () => (await list()).find((x) => x.id === id)!;
+    expect(await find()).toMatchObject({ start_time: '09:00', end_time: '12:30' });
+
+    await upsert(t.users.chef, { id, start_date: '2026-10-16', end_date: '2026-10-16' });
+    expect(await find()).toMatchObject({ start_date: '2026-10-16', start_time: '09:00', end_time: '12:30' });
+
+    await expectError(
+      upsert(t.users.founder, { id, start_date: '2026-10-16', end_date: '2026-10-16', start_time: '14:00', end_time: '10:00' }),
+      '同一天的項目，結束時間不能早於開始時間',
+    );
+    // 跨天就沒有這個限制；清空時間代表整天
+    await upsert(t.users.founder, { id, start_date: '2026-10-16', end_date: '2026-10-17', start_time: '14:00', end_time: '10:00' });
+    await upsert(t.users.founder, { id, start_date: '2026-10-16', end_date: '2026-10-17', start_time: '', end_time: '' });
+    expect(await find()).toMatchObject({ start_time: null, end_time: null });
+    await t.rpc(t.users.founder, 'delete_schedule_task', { p_id: id });
   });
 
   it('擋下不合理的資料', async () => {

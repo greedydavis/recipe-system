@@ -130,9 +130,11 @@ test('開店時間表：新增項目、拖拉改日期', async ({ page }) => {
   await sheet.getByLabel('分類').fill('裝潢');
   await sheet.getByLabel('開始日期').fill('2026-09-08');
   await sheet.getByLabel('結束日期').fill('2026-09-10');
+  await sheet.getByLabel('開始時間（選填）').fill('09:00');
+  await sheet.getByLabel('結束時間（選填）').fill('17:30');
   await expect(sheet.getByText('共 3 天')).toBeVisible();
   await sheet.getByRole('button', { name: '儲存' }).click();
-  const bar = page.getByRole('button', { name: /^E2E 招牌安裝 9\/8–9\/10（3 天）/ });
+  const bar = page.getByRole('button', { name: /^E2E 招牌安裝 9\/8 09:00–9\/10 17:30（3 天）/ });
   await expect(bar).toBeVisible();
 
   // 手機預設不能拖（避免捲動時誤觸）；開啟「拖拉調整」後往右拖 2 天
@@ -145,11 +147,11 @@ test('開店時間表：新增項目、拖拉改日期', async ({ page }) => {
   await page.mouse.move(box.x + box.width / 2 + 26, y, { steps: 3 });
   await page.mouse.move(box.x + box.width / 2 + 52, y, { steps: 3 });
   await page.mouse.up();
-  await expect(page.getByRole('button', { name: /^E2E 招牌安裝 9\/10–9\/12（3 天）/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^E2E 招牌安裝 9\/10 09:00–9\/12 17:30（3 天）/ })).toBeVisible();
 
-  await expect(page.getByText('「E2E 招牌安裝」改為 9/10–9/12（3 天）')).toBeVisible();
+  await expect(page.getByText('「E2E 招牌安裝」改為 9/10 09:00–9/12 17:30（3 天）')).toBeVisible();
 
   // 重新整理後還在：已經存進資料庫
   await page.reload();
-  await expect(page.getByRole('button', { name: /^E2E 招牌安裝 9\/10–9\/12（3 天）/ })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole('button', { name: /^E2E 招牌安裝 9\/10 09:00–9\/12 17:30（3 天）/ })).toBeVisible({ timeout: 60_000 });
 });

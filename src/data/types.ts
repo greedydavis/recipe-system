@@ -31,6 +31,9 @@ export interface ScheduleTask {
   category: string;
   start_date: string;
   end_date: string;
+  /** HH:MM；沒填代表整天 */
+  start_time: string | null;
+  end_time: string | null;
   is_done: boolean;
   note: string;
 }

@@ -54,8 +54,16 @@ function shortDate(iso: string): string {
   return `${m}/${d}`;
 }
 
-function rangeText(range: DateRange): string {
-  return `${shortDate(range.start_date)}–${shortDate(range.end_date)}（${durationDays(range)} 天）`;
+type Timed = DateRange & { start_time?: string | null; end_time?: string | null };
+
+/** 「9/8 09:00–9/10 17:00（3 天）」；同一天只寫一次日期，沒填時間就只寫日期 */
+function rangeText(range: Timed): string {
+  const from = `${shortDate(range.start_date)}${range.start_time ? ` ${range.start_time}` : ''}`;
+  const to =
+    range.start_date === range.end_date
+      ? (range.end_time ?? '')
+      : `${shortDate(range.end_date)}${range.end_time ? ` ${range.end_time}` : ''}`;
+  return `${to ? `${from}–${to}` : from}（${durationDays(range)} 天）`;
 }
 
 export function SchedulePage() {
@@ -138,7 +146,7 @@ export function SchedulePage() {
     client.setQueryData<ScheduleTask[]>(['list_schedule_tasks', {}], (old) =>
       old?.map((t) => (t.id === task.id ? { ...t, ...range } : t)),
     );
-    move.mutate({ id: task.id, ...range }, { onSuccess: () => toast(`「${task.name}」改為 ${rangeText(range)}`) });
+    move.mutate({ id: task.id, ...range }, { onSuccess: () => toast(`「${task.name}」改為 ${rangeText({ ...task, ...range })}`) });
   };
 
   // 週一到週五空白、週六日淡灰；用背景位移對齊時間線起點是星期幾
@@ -253,7 +261,7 @@ export function SchedulePage() {
                   <div style={{ width: chart.days * dayWidth }} />
                 </div>
                 {items.map((task) => {
-                  const range = drag?.id === task.id ? drag.range : task;
+                  const range: Timed = drag?.id === task.id ? { ...task, ...drag.range } : task;
                   const state = taskState(task, today);
                   const left = (dayNumber(range.start_date) - dayNumber(chart.start)) * dayWidth;
                   const width = durationDays(range) * dayWidth;
@@ -304,7 +312,13 @@ export function SchedulePage() {
                             />
                           )}
                           <span className="pointer-events-none px-3.5">
-                            {drag?.id === task.id ? rangeText(range) : width > 70 ? `${durationDays(range)} 天` : ''}
+                            {drag?.id === task.id
+                              ? rangeText(range)
+                              : task.start_time && width > 110
+                                ? `${task.start_time} 起・${durationDays(range)} 天`
+                                : width > 70
+                                  ? `${durationDays(range)} 天`
+                                  : ''}
                           </span>
                           {adjusting && (
                             <span
@@ -354,15 +368,18 @@ function TaskSheet({
   const [category, setCategory] = useState(task?.category ?? '');
   const [start, setStart] = useState(task?.start_date ?? defaultStart);
   const [end, setEnd] = useState(task?.end_date ?? addDays(defaultStart, 6));
+  const [startTime, setStartTime] = useState(task?.start_time ?? '');
+  const [endTime, setEndTime] = useState(task?.end_time ?? '');
   const [done, setDone] = useState(task?.is_done ?? false);
   const [note, setNote] = useState(task?.note ?? '');
   const save = useAction(() =>
     rpc('upsert_schedule_task', {
-      p: { id: task?.id ?? '', name, category, start_date: start, end_date: end, is_done: done, note },
+      p: { id: task?.id ?? '', name, category, start_date: start, end_date: end, start_time: startTime, end_time: endTime, is_done: done, note },
     }),
   );
   const remove = useAction(() => rpc('delete_schedule_task', { p_id: task!.id }));
-  const valid = !!name.trim() && !!start && !!end && end >= start;
+  const timeError = start === end && startTime && endTime && endTime < startTime ? '同一天的結束時間不能早於開始時間' : null;
+  const valid = !!name.trim() && !!start && !!end && end >= start && !timeError;
 
   return (
     <Sheet
@@ -374,6 +391,7 @@ function TaskSheet({
           {task && (
             <Button
               variant="danger"
+              className="shrink-0"
               loading={remove.isPending}
               onClick={() => confirm(`確定刪除「${task.name}」？`) && remove.mutate(undefined, { onSuccess: () => (toast('已刪除'), onClose()) })}
             >
@@ -421,9 +439,20 @@ function TaskSheet({
           {(id) => <Input id={id} type="date" value={end} min={start} onChange={(e) => setEnd(e.target.value)} />}
         </Field>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="開始時間（選填）">
+          {(id) => <Input id={id} type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />}
+        </Field>
+        <Field label="結束時間（選填）" error={timeError}>
+          {(id) => <Input id={id} type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />}
+        </Field>
+      </div>
       {start && end && end >= start && (
         <p className="text-sm text-muted">
-          {formatDate(start)} 到 {formatDate(end)}，共 {durationDays({ start_date: start, end_date: end })} 天（含頭尾）
+          {formatDate(start)}
+          {startTime && ` ${startTime}`} 到 {formatDate(end)}
+          {endTime && ` ${endTime}`}，共 {durationDays({ start_date: start, end_date: end })} 天（含頭尾）
+          {!startTime && !endTime && '；沒填時間代表整天'}
         </p>
       )}
       <Checkbox checked={done} onChange={setDone} label="已完成" />
