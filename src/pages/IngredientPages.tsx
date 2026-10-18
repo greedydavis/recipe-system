@@ -13,6 +13,7 @@ import {
   ErrorState,
   Field,
   Input,
+  LinkButton,
   Loading,
   Notice,
   NumberInput,
@@ -29,19 +30,24 @@ import {
 import { rpc, useAction, useRpc } from '../data/api';
 import type { IngredientDetail, IngredientListItem, SpecRow, Supplier, SupplierDetail } from '../data/types';
 import { ingredientUnitCost } from '../domain/costing';
-import { dec } from '../domain/decimal';
+import { type Dec, dec } from '../domain/decimal';
 import { formatLineCost, formatNumber, formatPercent } from '../domain/format';
 import type { CostingIngredient, Dimension } from '../domain/types';
 import { BASE_UNIT, compatibleUnits, unitLabel } from '../domain/units';
 import { DIMENSION_LABEL, INGREDIENT_CATEGORY_LABEL, RECIPE_TYPE_LABEL } from '../i18n/labels';
 
-/** 顯示單價：g／ml 換算成每公斤／每公升比較好讀 */
-function priceDisplay(ing: CostingIngredient): { text: string; missing: boolean } {
+/** 每基本單位的價格 → 好讀的寫法：g／ml 換算成每公斤／每公升 */
+export function perBaseText(perBase: Dec, dimension: Dimension): string {
+  if (dimension === 'mass') return `$${formatLineCost(perBase.mul(1000))}/kg`;
+  if (dimension === 'volume') return `$${formatLineCost(perBase.mul(1000))}/L`;
+  return `$${formatLineCost(perBase)}/個`;
+}
+
+/** 原物料目前的單價；缺價格時回傳原因 */
+export function priceDisplay(ing: CostingIngredient): { text: string; missing: boolean } {
   const r = ingredientUnitCost(ing);
   if (!r.ok) return { text: r.issue.replace(`「${ing.name}」`, ''), missing: true };
-  if (ing.base_dimension === 'mass') return { text: `$${formatLineCost(r.value.perBase.mul(1000))}/kg`, missing: false };
-  if (ing.base_dimension === 'volume') return { text: `$${formatLineCost(r.value.perBase.mul(1000))}/L`, missing: false };
-  return { text: `$${formatLineCost(r.value.perBase)}/個`, missing: false };
+  return { text: perBaseText(r.value.perBase, ing.base_dimension), missing: false };
 }
 
 // ───────────────────────── 原物料列表 ─────────────────────────
@@ -70,6 +76,9 @@ export function IngredientsPage() {
             <Link to="/suppliers" className="inline-flex min-h-9 items-center px-2 text-sm text-brand-700">
               供應商
             </Link>
+            <LinkButton to="/ingredients/prices" small>
+              批次輸入單價
+            </LinkButton>
             <Button small onClick={() => setCreating(true)}>
               <Plus className="size-4" aria-hidden />
               新增

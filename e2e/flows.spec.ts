@@ -155,3 +155,24 @@ test('開店時間表：新增項目、拖拉改日期', async ({ page }) => {
   await page.reload();
   await expect(page.getByRole('button', { name: /^E2E 招牌安裝 9\/10 09:00–9\/12 17:30（3 天）/ })).toBeVisible({ timeout: 60_000 });
 });
+
+test('批次輸入單價：一頁打完多個原物料，成本用新的單價', async ({ page }) => {
+  await loginAs(page, '示範店長');
+  await nav(page, '原物料');
+  await page.getByRole('link', { name: '批次輸入單價' }).click();
+  await expect(page.getByRole('heading', { name: '批次輸入單價', level: 1 })).toBeVisible();
+
+  // 豬大骨的數量、單位已經帶入預設規格（20 kg），只要打金額
+  const bone = page.getByLabel('豬大骨（示範） 金額');
+  await bone.fill('1500');
+  await expect(page.getByText('→ $75.00/kg')).toBeVisible();
+  await bone.press('Enter');
+  await expect(bone).not.toBeFocused();
+
+  await page.getByRole('button', { name: '儲存 1 筆' }).click();
+  await expect(page.getByText('已儲存 1 筆單價')).toBeVisible();
+
+  await page.getByRole('button', { name: '返回', exact: true }).last().click();
+  await page.getByRole('link', { name: /豬大骨（示範）/ }).click();
+  await expect(page.getByText('目前單價').locator('..')).toContainText('$75.00/kg');
+});

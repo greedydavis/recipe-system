@@ -9,6 +9,7 @@ import { Loading, Notice, ToastProvider } from './components/ui';
 import type { Role } from './domain/types';
 import './index.css';
 import { AuditPage, DataPage, MorePage, SettingsPage, UsersPage } from './pages/AdminPages';
+import { BatchPricesPage } from './pages/BatchPricesPage';
 import { CardPage } from './pages/CardPage';
 import { ComparePage } from './pages/ComparePage';
 import { HomePage } from './pages/HomePage';
@@ -87,6 +88,7 @@ const router = createHashRouter([
           { path: 'tastings/:id', element: guard(KITCHEN, <TastingSessionPage />) },
           { path: 'tasting-items/:id/feedback', element: <FeedbackPage /> },
           { path: 'ingredients', element: guard(KITCHEN, <IngredientsPage />) },
+          { path: 'ingredients/prices', element: guard(KITCHEN, <BatchPricesPage />) },
           { path: 'ingredients/:id', element: guard(KITCHEN, <IngredientDetailPage />) },
           { path: 'suppliers', element: guard(KITCHEN, <SuppliersPage />) },
           { path: 'suppliers/:id', element: guard(KITCHEN, <SupplierDetailPage />) },
