@@ -198,3 +198,21 @@ test('刪除原物料：沒用過的可以刪，用過的只能停用', async ({
   await expect(page.getByRole('dialog').getByRole('button', { name: '刪除' })).toHaveCount(0);
   await expect(page.getByRole('dialog').getByText(/不能刪除；不想再看到可以取消「啟用中」/)).toBeVisible();
 });
+
+test('批次輸入單價頁可以直接刪除沒用過的原物料', async ({ page }) => {
+  await loginAs(page, '示範店長');
+  await nav(page, '原物料');
+  await page.getByRole('button', { name: '新增' }).click();
+  await page.getByRole('dialog').getByLabel('名稱').fill('E2E 重複的原料');
+  await page.getByRole('dialog').getByRole('button', { name: '儲存' }).click();
+  await expect(page.getByRole('heading', { name: 'E2E 重複的原料', level: 1 })).toBeVisible();
+
+  await nav(page, '原物料');
+  await page.getByRole('link', { name: '批次輸入單價' }).click();
+  // 食譜用過的沒有刪除按鈕
+  await expect(page.getByRole('button', { name: '刪除 豬大骨（示範）' })).toHaveCount(0);
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: '刪除 E2E 重複的原料' }).click();
+  await expect(page.getByText('已刪除「E2E 重複的原料」')).toBeVisible();
+  await expect(page.getByLabel('E2E 重複的原料 金額')).toHaveCount(0);
+});

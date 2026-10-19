@@ -1,3 +1,4 @@
+import { Trash2 } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { useBlocker, useNavigate } from 'react-router';
 import { numStr, todayIso, toNum } from '../app/format';
@@ -75,6 +76,7 @@ export function BatchPricesPage() {
     .filter((i) => !category || i.category === category)
     .filter((i) => !missingOnly || priceDisplay(i).missing || rows[i.id]?.price);
 
+  const remove = useAction((ing: IngredientListItem) => rpc('delete_ingredient', { p_id: ing.id }));
   const save = useAction(() =>
     rpc<{ added: number; skipped: number; created_specs: number }>('batch_add_purchase_prices', {
       p: {
@@ -113,7 +115,7 @@ export function BatchPricesPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader back="/ingredients" title="批次輸入單價" subtitle="一頁打完進貨金額，按一次儲存" />
+      <PageHeader back="/ingredients" title="批次輸入單價" subtitle="一頁打完進貨金額，按一次儲存；沒有食譜用過的原物料可以直接刪除" />
 
       <Card className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
@@ -158,11 +160,31 @@ export function BatchPricesPage() {
           const hasPrice = row.price.trim() !== '';
           return (
             <div key={ing.id} className={cx('space-y-2 px-3 py-3', hasPrice && 'bg-brand-50')}>
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="font-semibold">{ing.name}</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 flex-1 font-semibold">{ing.name}</span>
                 <span className={cx('shrink-0 text-xs tabular-nums', current.missing ? 'text-amber-800' : 'text-muted')}>
                   目前 {current.missing ? '缺價格' : current.text}
                 </span>
+                {/* 食譜用過的只能停用（到原物料頁編輯）；資料庫也會再檢查一次 */}
+                {ing.used_in_count === 0 && (
+                  <button
+                    type="button"
+                    aria-label={`刪除 ${ing.name}`}
+                    disabled={remove.isPending}
+                    onClick={() => {
+                      if (!confirm(`確定刪除「${ing.name}」？包裝規格與單價會一起刪除（操作紀錄裡查得到）。`)) return;
+                      remove.mutate(ing, {
+                        onSuccess: () => {
+                          toast(`已刪除「${ing.name}」`);
+                          setRows(({ [ing.id]: _, ...rest }) => rest);
+                        },
+                      });
+                    }}
+                    className="-my-2 -mr-2 flex size-11 shrink-0 items-center justify-center rounded-lg text-red-700 hover:bg-red-50 disabled:opacity-40"
+                  >
+                    <Trash2 className="size-4" aria-hidden />
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <NumberInput
