@@ -2,6 +2,7 @@ import { ChevronRight, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { can, useRole } from '../app/auth';
+import { priceDisplay } from '../app/prices';
 import { formatDate, numStr, percentInputToRate, rateToPercentInput, todayIso, toNum } from '../app/format';
 import {
   Badge,
@@ -29,26 +30,11 @@ import {
 } from '../components/ui';
 import { rpc, useAction, useRpc } from '../data/api';
 import type { IngredientDetail, IngredientListItem, SpecRow, Supplier, SupplierDetail } from '../data/types';
-import { ingredientUnitCost } from '../domain/costing';
-import { type Dec, dec } from '../domain/decimal';
-import { formatLineCost, formatNumber, formatPercent } from '../domain/format';
-import type { CostingIngredient, Dimension } from '../domain/types';
+import { dec } from '../domain/decimal';
+import { formatNumber, formatPercent } from '../domain/format';
+import type { Dimension } from '../domain/types';
 import { BASE_UNIT, compatibleUnits, unitLabel } from '../domain/units';
 import { DIMENSION_LABEL, INGREDIENT_CATEGORY_LABEL, RECIPE_TYPE_LABEL } from '../i18n/labels';
-
-/** 每基本單位的價格 → 好讀的寫法：g／ml 換算成每公斤／每公升 */
-export function perBaseText(perBase: Dec, dimension: Dimension): string {
-  if (dimension === 'mass') return `$${formatLineCost(perBase.mul(1000))}/kg`;
-  if (dimension === 'volume') return `$${formatLineCost(perBase.mul(1000))}/L`;
-  return `$${formatLineCost(perBase)}/個`;
-}
-
-/** 原物料目前的單價；缺價格時回傳原因 */
-export function priceDisplay(ing: CostingIngredient): { text: string; missing: boolean } {
-  const r = ingredientUnitCost(ing);
-  if (!r.ok) return { text: r.issue.replace(`「${ing.name}」`, ''), missing: true };
-  return { text: perBaseText(r.value.perBase, ing.base_dimension), missing: false };
-}
 
 // ───────────────────────── 原物料列表 ─────────────────────────
 

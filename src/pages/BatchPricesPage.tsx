@@ -1,7 +1,7 @@
 import { Trash2 } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { useBlocker, useNavigate } from 'react-router';
-import { numStr, todayIso, toNum } from '../app/format';
+import { todayIso, toNum } from '../app/format';
 import {
   BottomBar,
   Button,
@@ -23,26 +23,11 @@ import {
 } from '../components/ui';
 import { rpc, useAction, useRpc } from '../data/api';
 import type { IngredientListItem, Supplier } from '../data/types';
-import { dec } from '../domain/decimal';
-import { compatibleUnits, toIngredientBase, unitLabel } from '../domain/units';
+import { compatibleUnits, unitLabel } from '../domain/units';
 import { INGREDIENT_CATEGORY_LABEL } from '../i18n/labels';
-import { perBaseText, priceDisplay } from './IngredientPages';
+import { type PriceEntry, defaultPriceEntry, entryUnitPrice, priceDisplay } from '../app/prices';
 
-interface Row {
-  qty: string;
-  unit: string;
-  price: string;
-}
-
-/** 這一行填的包裝與金額換算成的單價；填不完整或單位換不過去時回傳 null */
-function newUnitPrice(ing: IngredientListItem, row: Row): string | null {
-  const qty = toNum(row.qty);
-  const price = toNum(row.price);
-  if (qty === null || qty <= 0 || price === null) return null;
-  const base = toIngredientBase(dec(row.qty), row.unit, ing);
-  if (!base.ok || base.value.lte(0)) return null;
-  return perBaseText(dec(row.price).div(base.value), ing.base_dimension);
-}
+type Row = PriceEntry;
 
 /** 一頁輸入很多原物料的進貨金額：數量、單位先帶入預設規格，通常只要打金額 */
 export function BatchPricesPage() {
@@ -58,17 +43,12 @@ export function BatchPricesPage() {
   const [missingOnly, setMissingOnly] = useState(false);
   const [rows, setRows] = useState<Record<string, Row>>({});
 
-  const rowFor = (ing: IngredientListItem): Row =>
-    rows[ing.id] ?? {
-      qty: numStr(ing.default_spec?.pack_qty),
-      unit: ing.default_spec?.pack_unit ?? (ing.base_dimension === 'mass' ? 'kg' : ing.base_dimension === 'volume' ? 'L' : 'pc'),
-      price: '',
-    };
+  const rowFor = (ing: IngredientListItem): Row => rows[ing.id] ?? defaultPriceEntry(ing);
   const setRow = (ing: IngredientListItem, patch: Partial<Row>) => setRows((all) => ({ ...all, [ing.id]: { ...rowFor(ing), ...patch } }));
 
   const list = useMemo(() => ingredients.data ?? [], [ingredients.data]);
   const filled = list.filter((i) => rows[i.id] && rows[i.id].price.trim() !== '');
-  const invalid = filled.filter((i) => newUnitPrice(i, rows[i.id]) === null);
+  const invalid = filled.filter((i) => entryUnitPrice(i, rows[i.id]) === null);
 
   const term = q.trim();
   const shown = list
@@ -156,7 +136,7 @@ export function BatchPricesPage() {
         {shown.map((ing, index) => {
           const row = rowFor(ing);
           const current = priceDisplay(ing);
-          const preview = row.price.trim() ? newUnitPrice(ing, row) : null;
+          const preview = row.price.trim() ? entryUnitPrice(ing, row) : null;
           const hasPrice = row.price.trim() !== '';
           return (
             <div key={ing.id} className={cx('space-y-2 px-3 py-3', hasPrice && 'bg-brand-50')}>

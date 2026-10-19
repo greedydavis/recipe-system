@@ -216,3 +216,19 @@ test('批次輸入單價頁可以直接刪除沒用過的原物料', async ({ pa
   await expect(page.getByText('已刪除「E2E 重複的原料」')).toBeVisible();
   await expect(page.getByLabel('E2E 重複的原料 金額')).toHaveCount(0);
 });
+
+test('食譜用料可以直接點進去更新單價', async ({ page }) => {
+  await loginAs(page, '示範店長');
+  await openVersion(page, '招牌湯麵（示範）', 1);
+  const line = page.getByRole('button', { name: /^生麵條（示範）.*更新單價/ });
+  await line.click();
+  const sheet = page.getByRole('dialog');
+  await expect(sheet.getByRole('heading', { name: '單價：生麵條（示範）' })).toBeVisible();
+  await sheet.getByLabel('金額').fill('999');
+  const preview = (await sheet.getByText(/^新的單價 /).textContent())!.replace('新的單價 ', '');
+  await sheet.getByRole('button', { name: '儲存單價' }).click();
+  await expect(page.getByText('已更新「生麵條（示範）」的單價')).toBeVisible();
+
+  await line.click();
+  await expect(page.getByRole('dialog').getByText('目前單價').locator('..')).toContainText(preview);
+});

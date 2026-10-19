@@ -6,6 +6,8 @@ import { type CostView, useCosts } from '../app/costing';
 import { formatDate, formatDateTime, formatScore, formatSigned, numStr, toNum } from '../app/format';
 import { groupLines } from '../app/lines';
 import { PhotoStrip } from '../components/photos';
+import { QuickPriceSheet } from '../components/QuickPriceSheet';
+import { priceDisplay } from '../app/prices';
 import {
   Badge,
   BottomBar,
@@ -43,6 +45,7 @@ import {
 import { type Transition, availableTransitions } from '../domain/status';
 import { dec } from '../domain/decimal';
 import { unitLabel } from '../domain/units';
+import type { CostingBundle, CostingIngredient } from '../domain/types';
 import { DECISION_LABEL, DECISION_TONE, HEAT_LABEL, STATUS_LABEL } from '../i18n/labels';
 
 type TabKey = 'lines' | 'steps' | 'cost' | 'tasting' | 'history';
@@ -142,7 +145,7 @@ export function VersionPage() {
         onChange={(t) => setParams({ tab: t }, { replace: true })}
       />
 
-      {tab === 'lines' && <LinesTab v={v} />}
+      {tab === 'lines' && <LinesTab v={v} view={view} ingredients={costs.bundle?.ingredients} />}
       {tab === 'steps' && <StepsTab v={v} />}
       {tab === 'cost' && <CostTab v={v} view={view} loading={costs.isLoading} error={costs.error} />}
       {tab === 'tasting' && <TastingTab v={v} />}
@@ -257,49 +260,79 @@ function Summary({ v, view }: { v: VersionDetail; view?: CostView }) {
   );
 }
 
-function LinesTab({ v }: { v: VersionDetail }) {
+function LinesTab({ v, view, ingredients }: { v: VersionDetail; view?: CostView; ingredients?: CostingBundle['ingredients'] }) {
+  const [pricing, setPricing] = useState<{ ingredient: CostingIngredient; lineInfo: string } | null>(null);
   if (v.lines.length === 0) return <EmptyState title="還沒有用料" />;
+  const costByLine = new Map(view?.cost.lines.map((l) => [l.lineId, l]) ?? []);
   return (
     <div className="space-y-4">
+      <p className="text-xs text-muted">點原物料可以直接更新它的進貨金額，成本馬上重算。</p>
       {groupLines(v.lines).map(([group, lines], gi) => (
         <div key={`${group}-${gi}`}>
           {group && <h3 className="mb-1 text-sm font-semibold text-muted">{group}</h3>}
           <Card className="divide-y divide-line py-0">
-            {lines.map((l) => (
-              <div key={l.id} className="flex items-start gap-3 py-3">
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium">
-                    {l.line_kind === 'ingredient' ? (
-                      <Link to={`/ingredients/${l.ingredient_id}`} className="hover:underline">
-                        {l.ingredient_name}
-                      </Link>
-                    ) : (
-                      <Link to={`/versions/${l.component_version_id}`} className="hover:underline">
-                        {l.component_name} v{l.component_version_no}
-                      </Link>
-                    )}
-                    {l.line_kind === 'component' && l.component_status && (
-                      <StatusBadge status={l.component_status} className="ml-2 align-middle" />
+            {lines.map((l) => {
+              const ingredient = l.ingredient_id ? ingredients?.[l.ingredient_id] : undefined;
+              const lineCost = costByLine.get(l.id);
+              const qtyText = l.quantity === null ? '用量待填' : `${formatQty(dec(l.quantity), l.unit)} ${unitLabel(l.unit)}`;
+              const missingPrice = ingredient ? priceDisplay(ingredient).missing : false;
+              const body = (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium">
+                      {l.line_kind === 'ingredient' ? (
+                        l.ingredient_name
+                      ) : (
+                        <Link to={`/versions/${l.component_version_id}`} className="hover:underline">
+                          {l.component_name} v{l.component_version_no}
+                        </Link>
+                      )}
+                      {l.line_kind === 'component' && l.component_status && (
+                        <StatusBadge status={l.component_status} className="ml-2 align-middle" />
+                      )}
+                    </div>
+                    {(l.prep_note || l.waste_rate_override !== null) && (
+                      <div className="text-sm text-muted">
+                        {l.prep_note}
+                        {l.waste_rate_override !== null && `${l.prep_note ? '・' : ''}損耗 ${formatPercent(dec(l.waste_rate_override))}`}
+                      </div>
                     )}
                   </div>
-                  {(l.prep_note || l.waste_rate_override !== null) && (
-                    <div className="text-sm text-muted">
-                      {l.prep_note}
-                      {l.waste_rate_override !== null && `${l.prep_note ? '・' : ''}損耗 ${formatPercent(dec(l.waste_rate_override))}`}
+                  <div className="shrink-0 text-right tabular-nums">
+                    {l.quantity === null ? <Badge tone="warn">用量待填</Badge> : <span className="font-semibold">{qtyText}</span>}
+                    <div className="text-xs">
+                      {missingPrice ? (
+                        <span className="text-amber-800">缺價格</span>
+                      ) : lineCost?.cost ? (
+                        <span className="text-muted">${formatLineCost(lineCost.cost)}</span>
+                      ) : lineCost && lineCost.issues.length > 0 ? (
+                        <span className="text-amber-800">成本不完整</span>
+                      ) : null}
                     </div>
-                  )}
+                  </div>
+                </>
+              );
+              return ingredient ? (
+                <button
+                  key={l.id}
+                  type="button"
+                  onClick={() =>
+                    setPricing({
+                      ingredient,
+                      lineInfo: lineCost?.cost ? `${qtyText}・$${formatLineCost(lineCost.cost)}` : qtyText,
+                    })
+                  }
+                  className="flex w-full items-start gap-3 py-3 text-left hover:bg-brand-50"
+                  aria-label={`${l.ingredient_name} ${qtyText}，更新單價`}
+                >
+                  {body}
+                </button>
+              ) : (
+                <div key={l.id} className="flex items-start gap-3 py-3">
+                  {body}
                 </div>
-                <div className="text-right tabular-nums">
-                  {l.quantity === null ? (
-                    <Badge tone="warn">用量待填</Badge>
-                  ) : (
-                    <span className="font-semibold">
-                      {formatQty(dec(l.quantity), l.unit)} {unitLabel(l.unit)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </Card>
         </div>
       ))}
@@ -308,6 +341,7 @@ function LinesTab({ v }: { v: VersionDetail }) {
           <Card className="text-sm whitespace-pre-wrap">{v.notes}</Card>
         </Section>
       )}
+      {pricing && <QuickPriceSheet ingredient={pricing.ingredient} lineInfo={pricing.lineInfo} onClose={() => setPricing(null)} />}
     </div>
   );
 }
