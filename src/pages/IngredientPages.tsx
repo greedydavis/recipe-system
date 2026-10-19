@@ -141,6 +141,7 @@ function IngredientFormSheet({ ingredient, onClose }: { ingredient?: IngredientD
   const [density, setDensity] = useState(numStr(ingredient?.density_g_per_ml));
   const [note, setNote] = useState(ingredient?.note ?? '');
   const [active, setActive] = useState(ingredient?.is_active ?? true);
+  const remove = useAction(() => rpc('delete_ingredient', { p_id: ingredient!.id }));
   const save = useAction(() =>
     rpc<string>('upsert_ingredient', {
       p: {
@@ -161,21 +162,42 @@ function IngredientFormSheet({ ingredient, onClose }: { ingredient?: IngredientD
       onClose={onClose}
       title={ingredient ? '編輯原物料' : '新增原物料'}
       footer={
-        <Button
-          block
-          loading={save.isPending}
-          onClick={() =>
-            save.mutate(undefined, {
-              onSuccess: (id) => {
-                toast('已儲存');
-                onClose();
-                if (!ingredient) navigate(`/ingredients/${id}`);
-              },
-            })
-          }
-        >
-          儲存
-        </Button>
+        <>
+          {ingredient && ingredient.used_in.length === 0 && (
+            <Button
+              variant="danger"
+              className="shrink-0"
+              loading={remove.isPending}
+              onClick={() =>
+                confirm(`確定刪除「${ingredient.name}」？包裝規格與單價會一起刪除（操作紀錄裡查得到）。`) &&
+                remove.mutate(undefined, {
+                  onSuccess: () => {
+                    toast(`已刪除「${ingredient.name}」`);
+                    onClose();
+                    navigate('/ingredients', { replace: true });
+                  },
+                })
+              }
+            >
+              刪除
+            </Button>
+          )}
+          <Button
+            block
+            loading={save.isPending}
+            onClick={() =>
+              save.mutate(undefined, {
+                onSuccess: (id) => {
+                  toast('已儲存');
+                  onClose();
+                  if (!ingredient) navigate(`/ingredients/${id}`);
+                },
+              })
+            }
+          >
+            儲存
+          </Button>
+        </>
       }
     >
       <Field label="名稱">{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}</Field>
@@ -213,6 +235,11 @@ function IngredientFormSheet({ ingredient, onClose }: { ingredient?: IngredientD
       </div>
       <Field label="備註">{(id) => <Textarea id={id} rows={2} value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
       {ingredient && <Checkbox checked={active} onChange={setActive} label="啟用中" />}
+      {ingredient && ingredient.used_in.length > 0 && (
+        <p className="text-xs text-muted">
+          已經用在 {ingredient.used_in.length} 個食譜版本，不能刪除；不想再看到可以取消「啟用中」，用到它的食譜成本照常計算。
+        </p>
+      )}
     </Sheet>
   );
 }

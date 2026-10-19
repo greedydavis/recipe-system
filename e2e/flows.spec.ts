@@ -176,3 +176,25 @@ test('批次輸入單價：一頁打完多個原物料，成本用新的單價',
   await page.getByRole('link', { name: /豬大骨（示範）/ }).click();
   await expect(page.getByText('目前單價').locator('..')).toContainText('$75.00/kg');
 });
+
+test('刪除原物料：沒用過的可以刪，用過的只能停用', async ({ page }) => {
+  await loginAs(page, '示範店長');
+  await nav(page, '原物料');
+  await page.getByRole('button', { name: '新增' }).click();
+  await page.getByRole('dialog').getByLabel('名稱').fill('E2E 打錯的原料');
+  await page.getByRole('dialog').getByRole('button', { name: '儲存' }).click();
+  await expect(page.getByRole('heading', { name: 'E2E 打錯的原料', level: 1 })).toBeVisible();
+
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: '編輯' }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: '刪除' }).click();
+  await expect(page.getByText('已刪除「E2E 打錯的原料」')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '原物料', level: 1 })).toBeVisible();
+  await expect(page.getByRole('link', { name: /E2E 打錯的原料/ })).toHaveCount(0);
+
+  // 食譜用過的：沒有刪除按鈕，提示改用停用
+  await page.getByRole('link', { name: /豬大骨（示範）/ }).click();
+  await page.getByRole('button', { name: '編輯' }).first().click();
+  await expect(page.getByRole('dialog').getByRole('button', { name: '刪除' })).toHaveCount(0);
+  await expect(page.getByRole('dialog').getByText(/不能刪除；不想再看到可以取消「啟用中」/)).toBeVisible();
+});
