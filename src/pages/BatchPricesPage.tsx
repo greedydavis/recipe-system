@@ -25,7 +25,7 @@ import { rpc, useAction, useRpc } from '../data/api';
 import type { IngredientListItem, Supplier } from '../data/types';
 import { compatibleUnits, unitLabel } from '../domain/units';
 import { INGREDIENT_CATEGORY_LABEL } from '../i18n/labels';
-import { type PriceEntry, defaultPriceEntry, entryUnitPrice, priceDisplay } from '../app/prices';
+import { type PriceEntry, type UsageFilter, USAGE_OPTIONS, defaultPriceEntry, entryUnitPrice, matchesUsage, priceDisplay } from '../app/prices';
 
 type Row = PriceEntry;
 
@@ -41,6 +41,7 @@ export function BatchPricesPage() {
   const [q, setQ] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [missingOnly, setMissingOnly] = useState(false);
+  const [usage, setUsage] = useState<UsageFilter>(null);
   const [rows, setRows] = useState<Record<string, Row>>({});
 
   const rowFor = (ing: IngredientListItem): Row => rows[ing.id] ?? defaultPriceEntry(ing);
@@ -54,7 +55,8 @@ export function BatchPricesPage() {
   const shown = list
     .filter((i) => !term || i.name.includes(term) || i.code.includes(term))
     .filter((i) => !category || i.category === category)
-    .filter((i) => !missingOnly || priceDisplay(i).missing || rows[i.id]?.price);
+    .filter((i) => !missingOnly || priceDisplay(i).missing || rows[i.id]?.price)
+    .filter((i) => matchesUsage(i.used_in_count, usage) || rows[i.id]?.price);
 
   const remove = useAction((ing: IngredientListItem) => rpc('delete_ingredient', { p_id: ing.id }));
   const save = useAction(() =>
@@ -129,6 +131,7 @@ export function BatchPricesPage() {
           options={Object.entries(INGREDIENT_CATEGORY_LABEL).map(([value, label]) => ({ value, label }))}
         />
       </div>
+      <ChipGroup<'used' | 'unused'> label="食譜使用" value={usage} onChange={setUsage} allowClear options={USAGE_OPTIONS} />
       <Checkbox checked={missingOnly} onChange={setMissingOnly} label="只看缺價格" />
 
       {list.length === 0 && <EmptyState title="還沒有原物料">先到「原物料」新增，或匯入菜單配方表。</EmptyState>}

@@ -19,6 +19,20 @@ export function priceDisplay(ing: CostingIngredient): { text: string; missing: b
   return { text: perBaseText(r.value.perBase, ing.base_dimension), missing: false };
 }
 
+/** 原物料清單的「食譜使用」篩選；null 是全部 */
+export type UsageFilter = 'used' | 'unused' | null;
+
+export const USAGE_OPTIONS: Array<{ value: 'used' | 'unused'; label: string }> = [
+  { value: 'used', label: '有食譜用到' },
+  { value: 'unused', label: '沒有食譜用到' },
+];
+
+export function matchesUsage(usedInCount: number, filter: UsageFilter): boolean {
+  if (filter === 'used') return usedInCount > 0;
+  if (filter === 'unused') return usedInCount === 0;
+  return true;
+}
+
 /** 輸入進貨金額用的一行：包裝數量、單位、金額（都是表單字串） */
 export interface PriceEntry {
   qty: string;

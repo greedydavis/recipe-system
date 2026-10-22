@@ -2,7 +2,7 @@ import { ChevronRight, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { can, useRole } from '../app/auth';
-import { priceDisplay } from '../app/prices';
+import { type UsageFilter, USAGE_OPTIONS, matchesUsage, priceDisplay } from '../app/prices';
 import { formatDate, numStr, percentInputToRate, rateToPercentInput, todayIso, toNum } from '../app/format';
 import {
   Badge,
@@ -43,6 +43,7 @@ export function IngredientsPage() {
   const [q, setQ] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [missingOnly, setMissingOnly] = useState(params.get('missing') === '1');
+  const [usage, setUsage] = useState<UsageFilter>(null);
   const [inactive, setInactive] = useState(false);
   const [creating, setCreating] = useState(false);
   const list = useRpc<IngredientListItem[]>('list_ingredients', { p_q: null, p_category: null, p_include_inactive: inactive });
@@ -51,7 +52,8 @@ export function IngredientsPage() {
   const rows = (list.data ?? [])
     .filter((i) => !term || i.name.includes(term) || i.code.includes(term))
     .filter((i) => !category || i.category === category)
-    .filter((i) => !missingOnly || priceDisplay(i).missing);
+    .filter((i) => !missingOnly || priceDisplay(i).missing)
+    .filter((i) => matchesUsage(i.used_in_count, usage));
 
   return (
     <div className="space-y-3">
@@ -82,6 +84,7 @@ export function IngredientsPage() {
           options={Object.entries(INGREDIENT_CATEGORY_LABEL).map(([value, label]) => ({ value, label }))}
         />
       </div>
+      <ChipGroup<'used' | 'unused'> label="食譜使用" value={usage} onChange={setUsage} allowClear options={USAGE_OPTIONS} />
       <div className="flex flex-wrap gap-x-4">
         <Checkbox checked={missingOnly} onChange={setMissingOnly} label="只看缺價格" />
         <Checkbox checked={inactive} onChange={setInactive} label="含停用" />

@@ -232,3 +232,22 @@ test('食譜用料可以直接點進去更新單價', async ({ page }) => {
   await line.click();
   await expect(page.getByRole('dialog').getByText('目前單價').locator('..')).toContainText(preview);
 });
+
+test('原物料可以依「有沒有食譜用到」篩選', async ({ page }) => {
+  await loginAs(page, '示範店長');
+  await nav(page, '原物料');
+  await page.getByRole('button', { name: '新增' }).click();
+  await page.getByRole('dialog').getByLabel('名稱').fill('E2E 沒人用的原料');
+  await page.getByRole('dialog').getByRole('button', { name: '儲存' }).click();
+  await expect(page.getByRole('heading', { name: 'E2E 沒人用的原料', level: 1 })).toBeVisible();
+  await nav(page, '原物料');
+
+  const filter = page.getByRole('radiogroup', { name: '食譜使用' });
+  await filter.getByRole('radio', { name: '有食譜用到', exact: true }).click();
+  await expect(page.getByRole('link', { name: /豬大骨（示範）/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /E2E 沒人用的原料/ })).toHaveCount(0);
+
+  await filter.getByRole('radio', { name: '沒有食譜用到' }).click();
+  await expect(page.getByRole('link', { name: /E2E 沒人用的原料/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /豬大骨（示範）/ })).toHaveCount(0);
+});
