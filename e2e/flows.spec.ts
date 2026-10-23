@@ -251,3 +251,23 @@ test('原物料可以依「有沒有食譜用到」篩選', async ({ page }) => 
   await expect(page.getByRole('link', { name: /E2E 沒人用的原料/ })).toBeVisible();
   await expect(page.getByRole('link', { name: /豬大骨（示範）/ })).toHaveCount(0);
 });
+
+test('食譜清單可以只看成本完整或不完整的', async ({ page }) => {
+  await loginAs(page, '示範主廚');
+  await nav(page, '食譜');
+  await page.getByRole('button', { name: '新增' }).click();
+  const sheet = page.getByRole('dialog');
+  await sheet.getByLabel('名稱', { exact: true }).fill('E2E 沒填料的菜');
+  await sheet.getByRole('button', { name: '建立並編輯 v1 草案' }).click();
+  await expect(page.getByRole('heading', { name: '編輯 E2E 沒填料的菜 v1' })).toBeVisible();
+
+  await nav(page, '食譜');
+  const filter = page.getByRole('radiogroup', { name: '成本' });
+  await filter.getByRole('radio', { name: '成本已完整' }).click();
+  await expect(page.getByRole('link', { name: /招牌湯麵（示範）/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /E2E 沒填料的菜/ })).toHaveCount(0);
+
+  await filter.getByRole('radio', { name: '成本不完整' }).click();
+  await expect(page.getByRole('link', { name: /E2E 沒填料的菜/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /招牌湯麵（示範）/ })).toHaveCount(0);
+});

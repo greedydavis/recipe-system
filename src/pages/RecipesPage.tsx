@@ -8,6 +8,7 @@ import {
   Button,
   Card,
   Checkbox,
+  ChipGroup,
   EmptyState,
   ErrorState,
   Field,
@@ -43,6 +44,7 @@ export function RecipesPage() {
   const type = (params.get('type') as RecipeType) || 'dish';
   const [q, setQ] = useState(params.get('q') ?? '');
   const [archived, setArchived] = useState(false);
+  const [costFilter, setCostFilter] = useState<'complete' | 'incomplete' | null>(null);
   const [creating, setCreating] = useState(false);
   const debounced = useDebounced(q);
 
@@ -50,14 +52,20 @@ export function RecipesPage() {
   const versionIds = useMemo(() => (list.data ?? []).map((r) => r.locked?.id ?? r.latest.id), [list.data]);
   const costs = useCosts(versionIds);
 
+  // 成本篩選看的是清單上顯示的那個版本（有定版看定版，否則看最新版本）
+  const filtering = costFilter !== null && (list.data ?? []).length > 0 && !costs.views && !costs.error;
   const groups = useMemo(() => {
     const map = new Map<string, RecipeListItem[]>();
     for (const r of list.data ?? []) {
+      if (costFilter) {
+        const complete = costs.views?.get(r.locked?.id ?? r.latest.id)?.cost.isComplete ?? false;
+        if (complete !== (costFilter === 'complete')) continue;
+      }
       const key = r.type === 'dish' ? r.menu_category || '未分類' : COMPONENT_KIND_LABEL[r.component_kind as ComponentKind];
       map.set(key, [...(map.get(key) ?? []), r]);
     }
     return [...map.entries()];
-  }, [list.data]);
+  }, [list.data, costFilter, costs.views]);
 
   return (
     <div>
@@ -82,18 +90,33 @@ export function RecipesPage() {
       />
       <div className="space-y-2">
         <SearchInput value={q} onChange={setQ} placeholder="搜尋名稱、編號、分類或使用的原物料" />
+        <ChipGroup<'complete' | 'incomplete'>
+          label="成本"
+          value={costFilter}
+          onChange={setCostFilter}
+          allowClear
+          options={[
+            { value: 'complete', label: '成本已完整' },
+            { value: 'incomplete', label: '成本不完整' },
+          ]}
+        />
         <Checkbox checked={archived} onChange={setArchived} label="顯示已封存" />
       </div>
 
       <div className="mt-2 space-y-6">
-        {list.isLoading && <Loading />}
+        {(list.isLoading || filtering) && <Loading label={filtering ? '計算成本中…' : undefined} />}
         {list.error && <ErrorState error={list.error} onRetry={() => list.refetch()} />}
         {list.data && list.data.length === 0 && (
           <EmptyState title={q ? '找不到符合的食譜' : `還沒有${type === 'dish' ? '菜品' : '元件'}`}>
             {can.editRecipes(role) && !q && '按右上角「新增」建立第一個。'}
           </EmptyState>
         )}
-        {groups.map(([group, recipes]) => (
+        {list.data && list.data.length > 0 && costFilter && !filtering && groups.length === 0 && (
+          <EmptyState title={costFilter === 'complete' ? '還沒有成本完整的食譜' : '所有食譜的成本都完整了'}>
+            {costFilter === 'complete' && '用料的用量、原物料單價都填齊後，成本才算完整。'}
+          </EmptyState>
+        )}
+        {!filtering && groups.map(([group, recipes]) => (
           <section key={group} className="space-y-2">
             <h2 className="text-sm font-semibold text-muted">
               {group}（{recipes.length}）
