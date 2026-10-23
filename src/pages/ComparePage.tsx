@@ -1,13 +1,13 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
-import { useCosts } from '../app/costing';
+import { foodCostRateLabel, servingCostLabel, useCosts } from '../app/costing';
 import { formatScore, formatSigned } from '../app/format';
 import { Badge, Card, EmptyState, ErrorState, Loading, PageHeader, Section, Select, StatusBadge, cx } from '../components/ui';
 import { useRpc } from '../data/api';
 import type { RecipeDetail, VersionDetail } from '../data/types';
 import { dec } from '../domain/decimal';
 import { type ChangeKind, diffLines, diffSteps } from '../domain/diff';
-import { formatNumber, formatPercent, formatQty, formatServingCost } from '../domain/format';
+import { formatNumber, formatPercent, formatQty } from '../domain/format';
 import { unitLabel } from '../domain/units';
 import { STATUS_LABEL } from '../i18n/labels';
 
@@ -92,9 +92,9 @@ export function ComparePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                <Row label="每份成本" a={ca?.cost.isComplete ? `$${formatServingCost(ca.cost.servingCost)}` : '不完整'} b={cb?.cost.isComplete ? `$${formatServingCost(cb.cost.servingCost)}` : '不完整'} />
+                <Row label="每份成本" a={servingCostLabel(ca)} b={servingCostLabel(cb)} />
                 {vb.recipe.type === 'dish' ? (
-                  <Row label="食材成本率" a={formatPercent(ca?.metrics.foodCostRate ?? null)} b={formatPercent(cb?.metrics.foodCostRate ?? null)} />
+                  <Row label="食材成本率" a={foodCostRateLabel(ca)} b={foodCostRateLabel(cb)} />
                 ) : (
                   <Row label="出成率" a={formatPercent(ca?.cost.yieldRate ?? null)} b={formatPercent(cb?.cost.yieldRate ?? null)} />
                 )}

@@ -43,6 +43,9 @@ export interface CostRow {
   versionId: string;
   versionNo: number;
   servingCost: Dec | null;
+  /** 成本不完整時的下限（只加總算得出來的部分） */
+  minServingCost: Dec | null;
+  minFoodCostRate: Dec | null;
   price: number | null;
   foodCostRate: Dec | null;
   suggestedPrice: Dec | null;
@@ -184,6 +187,8 @@ export function summarizeProgress(
       versionId: c.versionId,
       versionNo: c.versionNo,
       servingCost: view?.cost.servingCost ?? null,
+      minServingCost: view?.cost.minServingCost ?? null,
+      minFoodCostRate: view?.minMetrics.foodCostRate ?? null,
       price: c.recipe.current_price?.price ?? null,
       foodCostRate: view?.metrics.foodCostRate ?? null,
       suggestedPrice: view?.metrics.suggestedPrice ?? null,

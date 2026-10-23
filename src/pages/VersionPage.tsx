@@ -2,7 +2,7 @@ import { AlertTriangle, Copy, FileText, GitCompare, Lock, Pencil, Trash2 } from 
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { can, useRole } from '../app/auth';
-import { type CostView, useCosts } from '../app/costing';
+import { type CostView, foodCostRateLabel, lineCostLabel, servingCostLabel, suggestedPriceLabel, useCosts } from '../app/costing';
 import { formatDate, formatDateTime, formatScore, formatSigned, numStr, toNum } from '../app/format';
 import { groupLines } from '../app/lines';
 import { PhotoStrip } from '../components/photos';
@@ -238,15 +238,15 @@ function Summary({ v, view }: { v: VersionDetail; view?: CostView }) {
   const items: Array<[string, string]> = isDish
     ? [
         ['每份克重', v.serving_qty ? `${formatNumber(v.serving_qty)} ${v.serving_unit}` : '未填'],
-        ['每份成本', view ? (view.cost.isComplete ? `$${formatServingCost(view.cost.servingCost)}` : '不完整') : '—'],
-        ['食材成本率', formatPercent(view?.metrics.foodCostRate ?? null)],
-        ['建議售價', view?.metrics.suggestedPrice ? `$${formatPrice(view.metrics.suggestedPrice)}` : '—'],
+        ['每份成本', servingCostLabel(view)],
+        ['食材成本率', foodCostRateLabel(view)],
+        ['建議售價', suggestedPriceLabel(view)],
       ]
     : [
         ['批次產量', v.batch_output_qty ? `${formatNumber(v.batch_output_qty)} ${v.batch_output_unit}` : '未填'],
         ['每份量', v.serving_qty ? `${formatNumber(v.serving_qty)} ${v.serving_unit}` : '未填'],
         ['出成率', formatPercent(view?.cost.yieldRate ?? null)],
-        ['每份成本', view ? (view.cost.isComplete ? `$${formatServingCost(view.cost.servingCost)}` : '不完整') : '—'],
+        ['每份成本', servingCostLabel(view)],
       ];
   return (
     <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -303,8 +303,8 @@ function LinesTab({ v, view, ingredients }: { v: VersionDetail; view?: CostView;
                     <div className="text-xs">
                       {missingPrice ? (
                         <span className="text-amber-800">缺價格</span>
-                      ) : lineCost?.cost ? (
-                        <span className="text-muted">${formatLineCost(lineCost.cost)}</span>
+                      ) : lineCost && lineCostLabel(lineCost) ? (
+                        <span className={lineCost.cost ? 'text-muted' : 'text-amber-800'}>{lineCostLabel(lineCost)}</span>
                       ) : lineCost && lineCost.issues.length > 0 ? (
                         <span className="text-amber-800">成本不完整</span>
                       ) : null}
@@ -420,7 +420,11 @@ function CostTab({ v, view, loading, error }: { v: VersionDetail; view?: CostVie
               <li key={i}>{i}</li>
             ))}
           </ul>
-          <p className="mt-1">已知部分合計 ${formatLineCost(cost.knownCost)}；補齊後才會計算每份成本、毛利與建議售價。</p>
+          <p className="mt-1">
+            {servingCostLabel(view) !== '不完整'
+              ? `先用算得出來的部分估：每份${servingCostLabel(view)}${isDish ? `、食材成本率${foodCostRateLabel(view)}` : ''}。缺的項目補上後成本只會更高；送核准與定版仍然要成本完整。`
+              : '目前還算不出任何一項的成本；補上用量與單價後才會計算。'}
+          </p>
         </Notice>
       )}
 
@@ -451,7 +455,7 @@ function CostTab({ v, view, loading, error }: { v: VersionDetail; view?: CostVie
                   {formatQty(l.purchaseQty, l.baseUnit)} {unitLabel(l.baseUnit)}
                 </td>
                 <td className="px-3 py-2 text-right">{formatUnitCost(l.unitCost)}</td>
-                <td className="px-3 py-2 text-right font-medium">{formatLineCost(l.cost)}</td>
+                <td className={cx('px-3 py-2 text-right font-medium', !l.cost && 'text-amber-800')}>{lineCostLabel(l)?.replace('$', '') ?? '—'}</td>
               </tr>
             ))}
           </tbody>

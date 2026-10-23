@@ -2,7 +2,7 @@ import { Archive, ChevronRight, Copy, Pencil } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { can, useRole } from '../app/auth';
-import { useCosts } from '../app/costing';
+import { foodCostRateLabel, servingCostLabel, suggestedPriceLabel, useCosts } from '../app/costing';
 import { formatDate, formatScore, percentInputToRate, rateToPercentInput, todayIso, toNum } from '../app/format';
 import {
   Badge,
@@ -23,7 +23,6 @@ import {
 } from '../components/ui';
 import { rpc, useAction, useRpc } from '../data/api';
 import type { RecipeDetail } from '../data/types';
-import { formatPercent, formatPrice, formatServingCost } from '../domain/format';
 import type { ComponentKind } from '../domain/types';
 import { COMPONENT_KIND_LABEL, RECIPE_TYPE_LABEL } from '../i18n/labels';
 
@@ -83,7 +82,7 @@ export function RecipeDetailPage() {
         <Card>
           <div className="text-xs text-muted">每份成本{locked ? '' : `（v${latest?.version_no}）`}</div>
           <div className="text-lg font-semibold tabular-nums">
-            {view ? (view.cost.isComplete ? `$${formatServingCost(view.cost.servingCost)}` : '不完整') : '—'}
+            {servingCostLabel(view)}
           </div>
         </Card>
         {r.type === 'dish' && (
@@ -94,10 +93,8 @@ export function RecipeDetailPage() {
             </Card>
             <Card>
               <div className="text-xs text-muted">食材成本率</div>
-              <div className="text-lg font-semibold tabular-nums">{formatPercent(view?.metrics.foodCostRate ?? null)}</div>
-              {view?.metrics.suggestedPrice && (
-                <div className="text-xs text-muted">建議售價 ${formatPrice(view.metrics.suggestedPrice)}</div>
-              )}
+              <div className="text-lg font-semibold tabular-nums">{foodCostRateLabel(view)}</div>
+              {suggestedPriceLabel(view) !== '—' && <div className="text-xs text-muted">建議售價 {suggestedPriceLabel(view)}</div>}
             </Card>
           </>
         )}

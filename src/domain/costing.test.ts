@@ -172,3 +172,62 @@ describe('成本計算：巢狀元件與出成率', () => {
     expect(r.issues).toContain('元件「酸菜料」v1 成本不完整');
   });
 });
+
+describe('成本計算：不完整時的成本下限（顯示「至少」）', () => {
+  const salt = ingredient({ name: '鹽', base: 'mass', spec: { qty: 1, unit: 'kg', price: 30 } });
+  const scallion = ingredient({ name: '青蔥', base: 'mass', spec: { qty: 1, unit: 'kg', price: null } });
+  const bone = ingredient({ name: '大骨', base: 'mass', spec: { qty: 1, unit: 'kg', price: 100 } });
+
+  it('菜品：缺價格、缺用量的行先不算，其餘加總；完整時下限就是每份成本', () => {
+    const v = version({
+      name: '下限菜',
+      type: 'dish',
+      serving: [300, 'g'],
+      lines: [ingLine(salt, 10, 'g'), ingLine(scallion, 5, 'g'), ingLine(bone, null, 'g')],
+    });
+    const r = computeVersionCost(bundle([v], [salt, scallion, bone]), v.id);
+    expect(r.isComplete).toBe(false);
+    expect(r.servingCost).toBeNull();
+    expect(r.minServingCost?.toString()).toBe('0.3');
+    expect(r.lines.map((l) => l.minCost?.toString() ?? null)).toEqual(['0.3', null, null]);
+
+    const full = version({ name: '完整菜', type: 'dish', serving: [300, 'g'], lines: [ingLine(salt, 10, 'g')] });
+    const f = computeVersionCost(bundle([full], [salt]), full.id);
+    expect(f.minServingCost?.toString()).toBe(f.servingCost?.toString());
+  });
+
+  it('菜品沒填每份克重：一份的下限仍然算得出來', () => {
+    const v = version({ name: '沒克重', type: 'dish', serving: null, lines: [ingLine(salt, 10, 'g')] });
+    const r = computeVersionCost(bundle([v], [salt]), v.id);
+    expect(r.isComplete).toBe(false);
+    expect(r.minServingCost?.toString()).toBe('0.3');
+  });
+
+  it('元件不完整：用已知部分換算每份；引用它的菜品下限也跟著往上加', () => {
+    const soup = version({
+      name: '湯底',
+      type: 'component',
+      batch: [1000, 'g'],
+      serving: [100, 'g'],
+      lines: [ingLine(bone, 500, 'g'), ingLine(scallion, 20, 'g')],
+    });
+    const s = computeVersionCost(bundle([soup], [bone, scallion]), soup.id);
+    expect(s.isComplete).toBe(false);
+    expect(s.minCostPerOutputUnit?.toString()).toBe('0.05');
+    expect(s.minServingCost?.toString()).toBe('5');
+
+    const dish = version({ name: '湯麵', type: 'dish', serving: [500, 'g'], lines: [compLine(soup, 200, 'g'), ingLine(salt, 10, 'g')] });
+    const d = computeVersionCost(bundle([soup, dish], [bone, scallion, salt]), dish.id);
+    expect(d.isComplete).toBe(false);
+    expect(d.lines[0].cost).toBeNull();
+    expect(d.lines[0].minCost?.toString()).toBe('10');
+    expect(d.minServingCost?.toString()).toBe('10.3');
+  });
+
+  it('元件沒填批次產量：換算不出每份，下限是 null', () => {
+    const soup = version({ name: '沒產量', type: 'component', batch: null, serving: [100, 'g'], lines: [ingLine(bone, 500, 'g')] });
+    const r = computeVersionCost(bundle([soup], [bone]), soup.id);
+    expect(r.minCostPerOutputUnit).toBeNull();
+    expect(r.minServingCost).toBeNull();
+  });
+});

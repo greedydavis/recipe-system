@@ -181,10 +181,16 @@ function CostTable({ rows }: { rows: CostRow[] }) {
                   <StatusBadge status={r.stage} />
                 </div>
               </td>
-              <td className="px-3 py-2 text-right">{r.complete ? `$${formatServingCost(r.servingCost)}` : <span className="text-amber-800">不完整</span>}</td>
+              <td className="px-3 py-2 text-right">
+                {r.complete ? (
+                  `$${formatServingCost(r.servingCost)}`
+                ) : (
+                  <span className="text-amber-800">{r.minServingCost?.gt(0) ? `至少 $${formatServingCost(r.minServingCost)}` : '不完整'}</span>
+                )}
+              </td>
               <td className="px-3 py-2 text-right">{r.price !== null ? `$${r.price}` : '—'}</td>
               <td className={cx('px-3 py-2 text-right', r.overTarget && 'font-semibold text-red-700')}>
-                {formatPercent(r.foodCostRate)}
+                {r.complete || !r.minFoodCostRate?.gt(0) ? formatPercent(r.foodCostRate) : <span className="text-amber-800">至少 {formatPercent(r.minFoodCostRate)}</span>}
                 {r.overTarget && r.targetRate && <div className="text-xs font-normal">目標 {formatPercent(r.targetRate)}</div>}
               </td>
               <td className="px-3 py-2 text-right">{r.suggestedPrice ? `$${formatPrice(r.suggestedPrice)}` : '—'}</td>

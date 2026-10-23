@@ -37,7 +37,7 @@ function viewFor(opts: { price?: number; quantity?: number | null; batch?: [numb
   });
   const b = bundle([v], [salt]);
   const cost = computeVersionCost(b, v.id);
-  return { cost, metrics: priceMetrics(cost.servingCost, v, DEFAULT_SETTINGS) };
+  return { cost, metrics: priceMetrics(cost.servingCost, v, DEFAULT_SETTINGS), minMetrics: priceMetrics(cost.minServingCost, v, DEFAULT_SETTINGS) };
 }
 
 describe('籌備進度彙整', () => {

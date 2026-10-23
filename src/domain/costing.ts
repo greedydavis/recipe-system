@@ -55,6 +55,11 @@ export interface LineCost {
   /** 每個基本單位（或產出單位）的成本 */
   unitCost: Dec | null;
   cost: Dec | null;
+  /**
+   * 成本下限：算得出來時等於 cost；引用的元件成本不完整時，用元件已知部分算出的下限。
+   * 原物料缺價格或用量時是 null（缺的項目只會讓成本更高，下限裡當作還沒加進去）。
+   */
+  minCost: Dec | null;
   /** 投入淨重（公克），計算出成率用 */
   gramWeight: Dec | null;
   priceId: string | null;
@@ -81,6 +86,12 @@ export interface VersionCost {
   costPerOutputUnit: Dec | null;
   servingCost: Dec | null;
   servingsPerBatch: Dec | null;
+  /**
+   * 成本不完整時的下限：只加總算得出來的部分（缺價格、缺用量的還沒算進去），實際成本一定不會比這個低。
+   * 畫面上一律標成「至少」；定版快照、平均與統計只用完整的 servingCost。產量或每份量沒填時是 null。
+   */
+  minCostPerOutputUnit: Dec | null;
+  minServingCost: Dec | null;
 }
 
 export class CostCalculator {
@@ -108,11 +119,13 @@ export class CostCalculator {
       .map((line) => this.line(line));
     const issues: string[] = [];
     let known = new D(0);
+    let knownMin = new D(0);
     let complete = true;
     let inputWeight: Dec | null = new D(0);
     for (const l of lines) {
       if (l.cost) known = known.add(l.cost);
       else complete = false;
+      if (l.minCost) knownMin = knownMin.add(l.minCost);
       issues.push(...l.issues);
       inputWeight = inputWeight && l.gramWeight ? inputWeight.add(l.gramWeight) : null;
     }
@@ -161,6 +174,22 @@ export class CostCalculator {
       }
     }
 
+    // 下限：和完整成本同樣的換算，只是用已知部分的合計
+    let minCostPerOutputUnit: Dec | null = null;
+    let minServingCost: Dec | null = null;
+    if (outputQty && outputUnit) {
+      minCostPerOutputUnit = knownMin.div(outputQty);
+      if (version.recipe_type === 'dish') {
+        minServingCost = knownMin;
+      } else if (servingQty && version.serving_unit) {
+        const servingInOutput = convertOutputQty(servingQty, version.serving_unit, outputUnit, version);
+        if (servingInOutput.ok) minServingCost = minCostPerOutputUnit.mul(servingInOutput.value);
+      }
+    } else if (version.recipe_type === 'dish') {
+      // 菜品的一個版本就是一份，沒填每份克重也知道一份至少多少錢
+      minServingCost = knownMin;
+    }
+
     const yieldRate =
       inputWeight && outputWeightG && inputWeight.gt(0) ? outputWeightG.div(inputWeight) : null;
 
@@ -180,6 +209,8 @@ export class CostCalculator {
       costPerOutputUnit,
       servingCost,
       servingsPerBatch,
+      minCostPerOutputUnit: servingCost ? costPerOutputUnit : minCostPerOutputUnit,
+      minServingCost: servingCost ?? minServingCost,
     };
   }
 
@@ -198,6 +229,7 @@ export class CostCalculator {
       purchaseQty: null,
       unitCost: null,
       cost: null,
+      minCost: null,
       gramWeight: null,
       priceId: null,
       componentVersionId: line.component_version_id,
@@ -240,6 +272,7 @@ export class CostCalculator {
     out.gramWeight = ingredientBaseToGrams(baseQty.value, ingredient);
     out.purchaseQty = baseQty.value.div(new D(1).sub(out.wasteRate));
     if (out.unitCost) out.cost = out.purchaseQty.mul(out.unitCost);
+    out.minCost = out.cost;
     return out;
   }
 
@@ -274,6 +307,7 @@ export class CostCalculator {
       out.gramWeight = outputQtyToGrams(qty.value, component.batch_output_unit, component);
     }
     if (out.unitCost) out.cost = qty.value.mul(out.unitCost);
+    out.minCost = out.cost ?? (sub.minCostPerOutputUnit ? qty.value.mul(sub.minCostPerOutputUnit) : null);
     return out;
   }
 }

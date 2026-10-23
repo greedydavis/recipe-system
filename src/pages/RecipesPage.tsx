@@ -2,7 +2,7 @@ import { AlertTriangle, ChevronRight, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { can, useRole } from '../app/auth';
-import { useCosts } from '../app/costing';
+import { foodCostRateLabel, servingCostLabel, useCosts } from '../app/costing';
 import {
   Badge,
   Button,
@@ -25,7 +25,6 @@ import {
 } from '../components/ui';
 import { rpc, useAction, useRpc } from '../data/api';
 import type { RecipeListItem } from '../data/types';
-import { formatPercent, formatServingCost } from '../domain/format';
 import type { ComponentKind, RecipeType } from '../domain/types';
 import { COMPONENT_KIND_LABEL } from '../i18n/labels';
 
@@ -146,8 +145,8 @@ export function RecipesPage() {
                         </span>
                         {view && (
                           <span className="tabular-nums">
-                            {view.cost.isComplete ? `每份 $${formatServingCost(view.cost.servingCost)}` : '成本不完整'}
-                            {r.type === 'dish' && view.metrics.foodCostRate && `・${formatPercent(view.metrics.foodCostRate)}`}
+                            {servingCostLabel(view) === '不完整' ? '成本不完整' : `每份${view.cost.isComplete ? ' ' : ''}${servingCostLabel(view)}`}
+                            {r.type === 'dish' && foodCostRateLabel(view) !== '—' && `・${foodCostRateLabel(view)}`}
                           </span>
                         )}
                         {r.current_price && <span>售價 ${r.current_price.price}</span>}

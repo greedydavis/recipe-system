@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useNavigate, useParams } from 'react-router';
+import { foodCostRateLabel, servingCostLabel } from '../app/costing';
 import { numStr, percentInputToRate, rateToPercentInput, toNum } from '../app/format';
 import { PhotoStrip } from '../components/photos';
 import { VersionPicker } from '../components/VersionPicker';
@@ -32,7 +33,7 @@ import { rpc, useAction, useRpc } from '../data/api';
 import type { IngredientListItem, VersionDetail } from '../data/types';
 import { CostCalculator } from '../domain/costing';
 import { decOrNull } from '../domain/decimal';
-import { formatLineCost, formatPercent, formatPrice, formatServingCost } from '../domain/format';
+import { formatPercent, formatPrice, formatServingCost } from '../domain/format';
 import { priceMetrics } from '../domain/pricing';
 import type { CostingBundle, CostingIngredient, CostingVersion, Dimension, OutputUnit, VersionStatus } from '../domain/types';
 import { BASE_UNIT, COMPONENT_LINE_UNITS, compatibleUnits, unitLabel } from '../domain/units';
@@ -729,7 +730,11 @@ function LiveCost({
       ingredients: { ...bundle.data.ingredients, ...Object.fromEntries(ingredients.map((i) => [i.id, i])) },
     };
     const cost = new CostCalculator(merged).version('__draft__');
-    return { cost, metrics: priceMetrics(cost.servingCost, draft, merged.settings) };
+    return {
+      cost,
+      metrics: priceMetrics(cost.servingCost, draft, merged.settings),
+      minMetrics: priceMetrics(cost.minServingCost, draft, merged.settings),
+    };
   }, [bundle.data, ingredients, form, versionId, isDish]);
 
   if (!result) return null;
@@ -743,7 +748,10 @@ function LiveCost({
         {cost.isComplete ? (
           <div className="text-lg font-semibold tabular-nums">每份 ${formatServingCost(cost.servingCost)}</div>
         ) : (
-          <div className="text-sm text-amber-800">不完整，已知 ${formatLineCost(cost.knownCost)}</div>
+          <div className="text-sm text-amber-800 tabular-nums">
+            不完整{servingCostLabel(result) !== '不完整' && `，每份${servingCostLabel(result)}`}
+            {isDish && foodCostRateLabel(result) !== '—' && `・食材成本率${foodCostRateLabel(result)}`}
+          </div>
         )}
       </div>
       {cost.isComplete && isDish && (

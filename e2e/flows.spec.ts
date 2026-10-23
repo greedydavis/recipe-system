@@ -271,3 +271,33 @@ test('食譜清單可以只看成本完整或不完整的', async ({ page }) => 
   await expect(page.getByRole('link', { name: /E2E 沒填料的菜/ })).toBeVisible();
   await expect(page.getByRole('link', { name: /招牌湯麵（示範）/ })).toHaveCount(0);
 });
+
+test('成本不完整時先顯示「至少」多少錢', async ({ page }) => {
+  await loginAs(page, '示範主廚');
+  await nav(page, '食譜');
+  await page.getByRole('button', { name: '新增' }).click();
+  await page.getByRole('dialog').getByLabel('名稱', { exact: true }).fill('E2E 蔥還沒定價的麵');
+  await page.getByRole('dialog').getByRole('button', { name: '建立並編輯 v1 草案' }).click();
+  await expect(page.getByRole('heading', { name: '編輯 E2E 蔥還沒定價的麵 v1' })).toBeVisible();
+
+  // 生麵條 $60/kg × 150 g = $9；另一項還沒有價格
+  await page.getByRole('button', { name: '原物料' }).click();
+  await page.getByRole('button', { name: /生麵條（示範）/ }).click();
+  await page.getByLabel('生麵條（示範） 用量').fill('150');
+  await page.getByRole('button', { name: '原物料' }).click();
+  const picker = page.getByRole('dialog');
+  await picker.getByPlaceholder('搜尋原物料').fill('E2E 沒價格的蔥');
+  await picker.getByRole('button', { name: /快速新增/ }).click();
+  await picker.getByRole('button', { name: '新增並加入' }).click();
+  await page.getByLabel('E2E 沒價格的蔥 用量').fill('5');
+  await expect(page.getByText(/不完整，每份至少 \$9\.0/)).toBeVisible();
+  await page.getByRole('button', { name: '儲存草案' }).click();
+  await expect(page.getByRole('button', { name: '已儲存' })).toBeVisible();
+
+  await page.getByRole('button', { name: '返回', exact: true }).last().click();
+  await expect(page.getByText('至少 $9.0').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /E2E 沒價格的蔥/ })).toContainText('缺價格');
+
+  await nav(page, '食譜');
+  await expect(page.getByRole('link', { name: /E2E 蔥還沒定價的麵/ })).toContainText('每份至少 $9.0');
+});
