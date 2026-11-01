@@ -43,7 +43,7 @@ function viewFor(opts: { price?: number; quantity?: number | null; batch?: [numb
 describe('籌備進度彙整', () => {
   const recipes: RecipeListItem[] = [
     recipe({ id: 'a', name: '定版菜', locked: { id: 'a-v2', version_no: 2, title: '', approved_at: '2026-09-20' }, current_price: { id: 'p', price: 100, effective_date: '2026-09-01' } }),
-    recipe({ id: 'b', name: '試菜中菜', latest: { id: 'b-v1', version_no: 1, title: '', status: 'testing', updated_at: '2026-09-22' } }),
+    recipe({ id: 'b', name: '缺用量菜', latest: { id: 'b-v1', version_no: 1, title: '', status: 'draft', updated_at: '2026-09-22' } }),
     recipe({ id: 'c', name: '草案菜', menu_category: '拌麵' }),
     recipe({ id: 's', name: '湯底', type: 'component', component_kind: 'soup', code: 'C-001', menu_category: '' }),
   ];
@@ -56,15 +56,11 @@ describe('籌備進度彙整', () => {
   ]);
 
   const dashboard = {
-    role: 'founder',
-    my_open_tasting_tasks: 0,
+    draft_count: 2,
     missing_price_ingredients: [{ id: 'i1', name: '雞骨架', code: 'I-0001' }],
-    testing_versions: [
-      { version_id: 'b-v1', recipe_id: 'b', recipe_name: '試菜中菜', recipe_type: 'dish' as const, version_no: 1, title: '', updated_at: '', feedback_count: 0 },
-    ],
     outdated_references: [],
-    pending_approvals: [],
-  } as unknown as Dashboard;
+    recent_versions: [],
+  } as Dashboard;
 
   const summary = summarizeProgress(recipes, views, dashboard);
 
@@ -74,19 +70,18 @@ describe('籌備進度彙整', () => {
     const soup = summary.categories.find((c) => c.category.startsWith('元件'));
     expect(soup?.total).toBe(1);
     const noodle = summary.categories.find((c) => c.category === '湯麵');
-    expect(noodle?.counts).toMatchObject({ locked: 1, testing: 1, draft: 0 });
+    expect(noodle?.counts).toMatchObject({ locked: 1, draft: 1 });
   });
 
   it('卡關清單只列出真的有問題的項目', () => {
     const kinds = summary.blockers.map((b) => b.kind);
     expect(kinds).toEqual(
-      expect.arrayContaining(['missing_price', 'missing_quantity', 'missing_yield', 'not_in_testing', 'no_feedback']),
+      expect.arrayContaining(['missing_price', 'missing_quantity', 'missing_yield', 'not_locked']),
     );
     expect(kinds).not.toContain('outdated_component');
-    expect(kinds).not.toContain('pending_approval');
 
     const quantity = summary.blockers.find((b) => b.kind === 'missing_quantity')!;
-    expect(quantity.items).toEqual([{ id: 'b-v1', label: '試菜中菜 v1', to: '/versions/b-v1' }]);
+    expect(quantity.items).toEqual([{ id: 'b-v1', label: '缺用量菜 v1', to: '/versions/b-v1' }]);
     const price = summary.blockers.find((b) => b.kind === 'missing_price')!;
     expect(price.items[0]).toMatchObject({ label: '雞骨架', to: '/ingredients/i1' });
     expect(summary.blockerCount).toBe(
@@ -95,7 +90,7 @@ describe('籌備進度彙整', () => {
   });
 
   it('成本總覽只看菜品，並統計完整與超標數量', () => {
-    expect(summary.costRows.map((r) => r.name)).toEqual(['定版菜', '試菜中菜', '草案菜']);
+    expect(summary.costRows.map((r) => r.name)).toEqual(['定版菜', '缺用量菜', '草案菜']);
     const locked = summary.costRows[0];
     // 鹽 100 g × 0.03 = 3 元；售價 100 含稅 → 未稅 95.238 → 3.15%
     expect(locked.servingCost?.toString()).toBe('3');

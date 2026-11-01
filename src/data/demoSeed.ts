@@ -13,12 +13,8 @@ export async function seedDemoData(api: SeedApi): Promise<void> {
   const founder = await api.createUser('founder@demo.local', '示範創辦人');
   const chef = await api.createUser('chef@demo.local', '示範主廚');
   const manager = await api.createUser('manager@demo.local', '示範店長');
-  const tester1 = await api.createUser('tester1@demo.local', '示範試吃員甲');
-  const tester2 = await api.createUser('tester2@demo.local', '示範試吃員乙');
   await api.setRole(chef, 'chef');
   await api.setRole(manager, 'manager');
-  await api.setRole(tester1, 'tester');
-  await api.setRole(tester2, 'tester');
 
   const asChef = <T>(fn: string, args?: Record<string, unknown>) => api.rpcAs<T>(chef, fn, args);
 
@@ -99,7 +95,8 @@ export async function seedDemoData(api: SeedApi): Promise<void> {
       ],
     },
   });
-  await asChef('transition_version', { p_version_id: soup.version_id, p_to: 'testing', p_comment: '' });
+  // 成本快照由資料庫依當下資料重算
+  await api.rpcAs(founder, 'transition_version', { p_version_id: soup.version_id, p_to: 'locked', p_comment: '湯頭清爽，定版' });
 
   // 菜品：招牌湯麵
   const dish = await asChef<{ recipe_id: string; version_id: string }>('create_recipe', {
@@ -126,42 +123,6 @@ export async function seedDemoData(api: SeedApi): Promise<void> {
     },
   });
   await api.rpcAs(founder, 'set_menu_price', { p_recipe_id: dish.recipe_id, p_price: 90, p_effective_date: '2026-09-01', p_note: '示範售價' });
-  await asChef('transition_version', { p_version_id: dish.version_id, p_to: 'testing', p_comment: '' });
-
-  // 試菜與評分
-  const session = await api.rpcAs<string>(manager, 'create_tasting_session', {
-    p: {
-      tasted_on: '2026-09-15',
-      title: '示範：第一輪試菜',
-      location: '中央廚房',
-      items: [
-        { version_id: soup.version_id, blind_label: 'A', maker_id: chef, assigned_tester_ids: [tester1, tester2] },
-        { version_id: dish.version_id, maker_id: chef, assigned_tester_ids: [tester1, tester2, manager] },
-      ],
-    },
-  });
-  const detail = await api.rpcAs<{ items: Array<{ id: string }> }>(manager, 'get_tasting_session', { p_id: session });
-  const [soupItem, dishItem] = detail.items.map((i) => i.id);
-  await api.rpcAs(tester1, 'submit_feedback', {
-    p_item_id: soupItem,
-    p: { score_overall: 4, score_flavor: 4, score_aroma: 4, saltiness: 0, oiliness: -1, issues: '後段略淡', suggestions: '大骨可再多一些', menu_ready: 'maybe' },
-  });
-  await api.rpcAs(tester2, 'submit_feedback', {
-    p_item_id: soupItem,
-    p: { score_overall: 5, score_flavor: 5, saltiness: 0, oiliness: 0, suggestions: '湯色漂亮', menu_ready: 'yes' },
-  });
-  await api.rpcAs(tester1, 'submit_feedback', {
-    p_item_id: dishItem,
-    p: { score_overall: 3, score_texture: 3, saltiness: 1, issues: '麵條稍軟', suggestions: '麵煮 75 秒試試', menu_ready: 'maybe' },
-  });
-
-  // 湯底送核准並定版（成本快照由資料庫依當下資料重算）
-  await asChef('transition_version', { p_version_id: soup.version_id, p_to: 'pending_approval', p_comment: '兩位試吃平均 4.5 分' });
-  await api.rpcAs(founder, 'transition_version', {
-    p_version_id: soup.version_id,
-    p_to: 'locked',
-    p_comment: '湯頭清爽，定版',
-  });
 
   // 開店時間表（虛構的排程）
   const schedule: Array<[string, string, string, string, boolean?]> = [

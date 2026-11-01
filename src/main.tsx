@@ -19,7 +19,6 @@ import { LoginPage, PendingPage, ResetPasswordPage } from './pages/LoginPage';
 import { RecipeDetailPage } from './pages/RecipeDetailPage';
 import { RecipesPage } from './pages/RecipesPage';
 import { SchedulePage } from './pages/SchedulePage';
-import { FeedbackPage, TastingNewPage, TastingSessionPage, TastingsPage } from './pages/TastingPages';
 import { VersionEditPage } from './pages/VersionEditPage';
 import { VersionPage } from './pages/VersionPage';
 
@@ -83,10 +82,6 @@ const router = createHashRouter([
           { path: 'versions/:id/edit', element: guard(['founder', 'chef'], <VersionEditPage />) },
           { path: 'versions/:id/card', element: guard(KITCHEN, <CardPage />) },
           { path: 'compare', element: guard(KITCHEN, <ComparePage />) },
-          { path: 'tastings', element: <TastingsPage /> },
-          { path: 'tastings/new', element: guard(KITCHEN, <TastingNewPage />) },
-          { path: 'tastings/:id', element: guard(KITCHEN, <TastingSessionPage />) },
-          { path: 'tasting-items/:id/feedback', element: <FeedbackPage /> },
           { path: 'ingredients', element: guard(KITCHEN, <IngredientsPage />) },
           { path: 'ingredients/prices', element: guard(KITCHEN, <BatchPricesPage />) },
           { path: 'ingredients/:id', element: guard(KITCHEN, <IngredientDetailPage />) },

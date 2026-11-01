@@ -5,12 +5,11 @@ import { rpc, useAction } from '../data/api';
 import type { Photo } from '../data/types';
 import { Button, cx, useToast } from './ui';
 
-export type PhotoTarget = { version_id: string } | { step_id: string } | { tasting_item_id: string };
+export type PhotoTarget = { version_id: string } | { step_id: string };
 
 function targetPrefix(target: PhotoTarget): string {
   if ('version_id' in target) return `versions/${target.version_id}`;
-  if ('step_id' in target) return `steps/${target.step_id}`;
-  return `tastings/${target.tasting_item_id}`;
+  return `steps/${target.step_id}`;
 }
 
 export function PhotoThumb({ path, alt, className }: { path: string; alt: string; className?: string }) {
@@ -51,8 +50,7 @@ export function PhotoStrip({
   photos: Photo[];
   target: PhotoTarget;
   canAdd: boolean;
-  /** 可以傳函式逐張判斷（例如試做照：主廚、店長只能刪自己上傳的） */
-  canDelete: boolean | ((photo: Photo) => boolean);
+  canDelete: boolean;
   emptyText?: string;
   large?: boolean;
 }) {
@@ -140,7 +138,7 @@ export function PhotoStrip({
       {viewing && (
         <div className="no-print fixed inset-0 z-50 flex flex-col bg-black/90" role="dialog" aria-modal="true">
           <div className="flex justify-end gap-2 p-3">
-            {(typeof canDelete === 'function' ? canDelete(viewing) : canDelete) && (
+            {canDelete && (
               <Button
                 variant="danger"
                 small

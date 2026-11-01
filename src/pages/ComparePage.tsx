@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { foodCostRateLabel, servingCostLabel, useCosts } from '../app/costing';
-import { formatScore, formatSigned } from '../app/format';
 import { Badge, Card, EmptyState, ErrorState, Loading, PageHeader, Section, Select, StatusBadge, cx } from '../components/ui';
 import { useRpc } from '../data/api';
 import type { RecipeDetail, VersionDetail } from '../data/types';
@@ -49,14 +48,6 @@ export function ComparePage() {
   const ca = aId ? costs.views?.get(aId) : undefined;
   const cb = costs.views?.get(bId);
 
-  const avg = (v?: VersionDetail, key: 'avg_overall' | 'avg_saltiness' | 'avg_oiliness' = 'avg_overall') => {
-    if (!v) return null;
-    const rows = v.tastings.filter((t) => t[key] !== null && t.feedback_count > 0);
-    const total = rows.reduce((s, t) => s + t.feedback_count, 0);
-    if (!total) return null;
-    return rows.reduce((s, t) => s + Number(t[key]) * t.feedback_count, 0) / total;
-  };
-
   return (
     <div className="space-y-6">
       <PageHeader back={`/versions/${bId}`} title="版本比較" subtitle={vb.recipe.name} />
@@ -99,9 +90,6 @@ export function ComparePage() {
                   <Row label="出成率" a={formatPercent(ca?.cost.yieldRate ?? null)} b={formatPercent(cb?.cost.yieldRate ?? null)} />
                 )}
                 <Row label={vb.recipe.type === 'dish' ? '每份克重' : '批次產量'} a={va.batch_output_qty ? `${formatNumber(va.batch_output_qty)} ${va.batch_output_unit}` : '—'} b={vb.batch_output_qty ? `${formatNumber(vb.batch_output_qty)} ${vb.batch_output_unit}` : '—'} />
-                <Row label="試吃平均（整體）" a={formatScore(avg(va))} b={formatScore(avg(vb))} />
-                <Row label="鹹淡（−2 淡／+2 鹹）" a={formatSigned(avg(va, 'avg_saltiness'))} b={formatSigned(avg(vb, 'avg_saltiness'))} />
-                <Row label="油膩（−2 清／+2 油）" a={formatSigned(avg(va, 'avg_oiliness'))} b={formatSigned(avg(vb, 'avg_oiliness'))} />
               </tbody>
             </table>
           </Card>

@@ -37,7 +37,6 @@ export interface BaselineRecipe {
   component_kind?: string;
   menu_category?: string;
   description?: string;
-  to_testing?: boolean;
   /** 系統裡還是這些舊名稱時，先改名再當成同一個食譜的新版本 */
   previous_names?: string[];
   version: BaselineVersion;
@@ -65,7 +64,7 @@ interface ImportResult {
   skipped_recipes: number;
   /** 改名、新增了哪個版本 */
   changes?: string[];
-  /** 例如「無法送試菜，保留為草案」；資料已經匯入，只是需要人工處理 */
+  /** 需要人工處理的項目；資料已經匯入 */
   warnings?: string[];
 }
 

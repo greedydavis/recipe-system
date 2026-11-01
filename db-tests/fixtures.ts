@@ -94,11 +94,6 @@ export async function saveDraft(
   });
 }
 
-export function transition(t: TestDb, user: string, versionId: string, to: string, comment = '', snapshot: unknown = null) {
-  return t.rpc(user, 'transition_version', {
-    p_version_id: versionId,
-    p_to: to,
-    p_comment: comment,
-    p_snapshot: snapshot,
-  });
+export function transition(t: TestDb, user: string, versionId: string, to: string, comment = '') {
+  return t.rpc(user, 'transition_version', { p_version_id: versionId, p_to: to, p_comment: comment });
 }

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { can, useRole } from '../app/auth';
 import { type CostView, foodCostRateLabel, lineCostLabel, servingCostLabel, suggestedPriceLabel, useCosts } from '../app/costing';
-import { formatDate, formatDateTime, formatScore, formatSigned, numStr, toNum } from '../app/format';
+import { formatDate, formatDateTime } from '../app/format';
 import { groupLines } from '../app/lines';
 import { PhotoStrip } from '../components/photos';
 import { QuickPriceSheet } from '../components/QuickPriceSheet';
@@ -19,9 +19,7 @@ import {
   LinkButton,
   Loading,
   Notice,
-  NumberInput,
   PageHeader,
-  QtyUnitField,
   Section,
   Sheet,
   StatusBadge,
@@ -46,9 +44,9 @@ import { type Transition, availableTransitions } from '../domain/status';
 import { dec } from '../domain/decimal';
 import { unitLabel } from '../domain/units';
 import type { CostingBundle, CostingIngredient } from '../domain/types';
-import { DECISION_LABEL, DECISION_TONE, HEAT_LABEL, STATUS_LABEL } from '../i18n/labels';
+import { HEAT_LABEL } from '../i18n/labels';
 
-type TabKey = 'lines' | 'steps' | 'cost' | 'tasting' | 'history';
+type TabKey = 'lines' | 'steps' | 'cost' | 'history';
 
 export function VersionPage() {
   const { id = '' } = useParams();
@@ -60,7 +58,6 @@ export function VersionPage() {
   const version = useRpc<VersionDetail>('get_version', { p_id: id });
   const costs = useCosts([id]);
   const [transition, setTransition] = useState<Transition | null>(null);
-  const [recordingYield, setRecordingYield] = useState(false);
 
   const copy = useAction(() => rpc<string>('copy_version', { p_source_id: id, p_change_note: '' }));
   const remove = useAction(() => rpc('delete_draft', { p_version_id: id }));
@@ -95,21 +92,7 @@ export function VersionPage() {
       <div className="mb-4 space-y-2">
         {v.status === 'locked' && (
           <Notice tone="ok" title={<span className="inline-flex items-center gap-1"><Lock className="size-4" aria-hidden />已定版，內容不可修改</span>}>
-            {formatDate(v.approved_at)} 由 {v.approved_by_name ?? '—'} 核准。要修改請「複製為新版本」。
-          </Notice>
-        )}
-        {(v.status === 'testing' || v.status === 'pending_approval') && (
-          <Notice tone="info">
-            內容已凍結（{STATUS_LABEL[v.status]}）。要修改請「複製為新版本」。
-            {v.status === 'testing' && '試做後量到的產量還是可以記錄。'}
-          </Notice>
-        )}
-        {v.status === 'testing' && can.editRecipes(role) && (v.batch_output_qty === null || v.serving_qty === null) && (
-          <Notice tone="warn" title="還沒記錄實際產量">
-            <p>試做完秤出成品量再填，系統才算得出出成率與每份成本；送核准前必須填。</p>
-            <Button small className="mt-2" onClick={() => setRecordingYield(true)}>
-              記錄實際產量
-            </Button>
+            {formatDate(v.approved_at)} 由 {v.approved_by_name ?? '—'} 定版。要修改請「複製為新版本」。
           </Notice>
         )}
         {v.status === 'retired' && (
@@ -138,7 +121,6 @@ export function VersionPage() {
           { key: 'lines', label: `用料 ${v.lines.length}` },
           { key: 'steps', label: `步驟 ${v.steps.length}` },
           { key: 'cost', label: '成本' },
-          { key: 'tasting', label: `試菜 ${v.tastings.length}` },
           { key: 'history', label: '紀錄' },
         ]}
         value={tab}
@@ -148,7 +130,6 @@ export function VersionPage() {
       {tab === 'lines' && <LinesTab v={v} view={view} ingredients={costs.bundle?.ingredients} />}
       {tab === 'steps' && <StepsTab v={v} />}
       {tab === 'cost' && <CostTab v={v} view={view} loading={costs.isLoading} error={costs.error} />}
-      {tab === 'tasting' && <TastingTab v={v} />}
       {tab === 'history' && <HistoryTab v={v} canAudit={can.viewAudit(role)} />}
 
       <Section title="其他操作" className="mt-8">
@@ -161,11 +142,6 @@ export function VersionPage() {
             <GitCompare className="size-4" aria-hidden />
             版本比較
           </LinkButton>
-          {v.status === 'testing' && can.editRecipes(role) && (
-            <Button small variant="secondary" onClick={() => setRecordingYield(true)}>
-              記錄實際產量
-            </Button>
-          )}
           {can.editRecipes(role) && (
             <Button
               small
@@ -228,7 +204,6 @@ export function VersionPage() {
       )}
 
       {transition && <TransitionSheet v={v} transition={transition} view={view} onClose={() => setTransition(null)} />}
-      {recordingYield && <YieldSheet v={v} onClose={() => setRecordingYield(false)} />}
     </div>
   );
 }
@@ -422,7 +397,7 @@ function CostTab({ v, view, loading, error }: { v: VersionDetail; view?: CostVie
           </ul>
           <p className="mt-1">
             {servingCostLabel(view) !== '不完整'
-              ? `先用算得出來的部分估：每份${servingCostLabel(view)}${isDish ? `、食材成本率${foodCostRateLabel(view)}` : ''}。缺的項目補上後成本只會更高；送核准與定版仍然要成本完整。`
+              ? `先用算得出來的部分估：每份${servingCostLabel(view)}${isDish ? `、食材成本率${foodCostRateLabel(view)}` : ''}。缺的項目補上後成本只會更高。`
               : '目前還算不出任何一項的成本；補上用量與單價後才會計算。'}
           </p>
         </Notice>
@@ -507,7 +482,7 @@ function CostTab({ v, view, loading, error }: { v: VersionDetail; view?: CostVie
           {v.snapshots.map((s) => (
             <Card key={s.id} className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
               <Metric label="價格日期" value={formatDate(s.price_as_of)} />
-              <Metric label="每份成本" value={s.cost_per_serving !== null ? `$${formatServingCost(dec(s.cost_per_serving))}` : '—'} />
+              <Metric label="每份成本" value={s.cost_per_serving !== null ? `$${formatServingCost(dec(s.cost_per_serving))}` : '定版時還不完整'} />
               <Metric label="食材成本率" value={s.food_cost_rate !== null ? formatPercent(dec(s.food_cost_rate)) : '—'} />
               <Metric label="出成率" value={s.yield_rate !== null ? formatPercent(dec(s.yield_rate)) : '—'} />
             </Card>
@@ -526,65 +501,6 @@ function Metric({ label, value, strong, warn }: { label: string; value: string; 
         {value}
         {warn && <AlertTriangle className="ml-1 inline size-4" aria-label="超過目標" />}
       </div>
-    </div>
-  );
-}
-
-function TastingTab({ v }: { v: VersionDetail }) {
-  if (v.tastings.length === 0) {
-    return (
-      <EmptyState title="還沒有試菜紀錄">
-        {v.status === 'draft' ? '送試菜後，可以在「試菜」建立場次。' : '到「試菜」建立場次並選擇這個版本。'}
-      </EmptyState>
-    );
-  }
-  return (
-    <div className="space-y-3">
-      {v.tastings.map((t) => (
-        <Link key={t.item_id} to={`/tastings/${t.session_id}`} className="block">
-          <Card className="space-y-2 hover:bg-brand-50">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold">{formatDate(t.tasted_on)}</span>
-              <span className="text-muted">{t.session_title}</span>
-              {t.blind_label && <Badge>盲測 {t.blind_label}</Badge>}
-              {t.decision && <Badge tone={DECISION_TONE[t.decision]}>{DECISION_LABEL[t.decision]}</Badge>}
-            </div>
-            <div className="flex flex-wrap gap-3 text-sm">
-              <span>
-                整體 <b className="tabular-nums">{formatScore(t.avg_overall)}</b>（{t.feedback_count} 人）
-              </span>
-              <span>鹹淡 {formatSigned(t.avg_saltiness)}</span>
-              <span>油膩 {formatSigned(t.avg_oiliness)}</span>
-              {t.maker_name && <span className="text-muted">試做：{t.maker_name}</span>}
-            </div>
-            {t.deviation_note && <p className="text-sm text-muted">實際偏差：{t.deviation_note}</p>}
-            {t.issues.length > 0 && (
-              <div className="text-sm">
-                <span className="font-medium">問題：</span>
-                {t.issues.join('／')}
-              </div>
-            )}
-            {t.suggestions.length > 0 && (
-              <div className="text-sm">
-                <span className="font-medium">建議：</span>
-                {t.suggestions.join('／')}
-              </div>
-            )}
-            {t.conclusion && (
-              <div className="rounded-lg bg-brand-50 px-3 py-2 text-sm">
-                <span className="font-medium">會議結論：</span>
-                {t.conclusion}
-              </div>
-            )}
-            {t.session_summary && (
-              <details className="text-sm">
-                <summary className="min-h-9 cursor-pointer text-brand-700">當天的試菜總結</summary>
-                <p className="mt-1 whitespace-pre-wrap text-muted">{t.session_summary}</p>
-              </details>
-            )}
-          </Card>
-        </Link>
-      ))}
     </div>
   );
 }
@@ -624,82 +540,6 @@ function HistoryTab({ v, canAudit }: { v: VersionDetail; canAudit: boolean }) {
   );
 }
 
-/** 試菜中記錄實際做出來的產量；食譜內容仍然是凍結的 */
-function YieldSheet({ v, onClose }: { v: VersionDetail; onClose: () => void }) {
-  const toast = useToast();
-  const isDish = v.recipe.type === 'dish';
-  const [batchQty, setBatchQty] = useState(numStr(v.batch_output_qty));
-  const [batchUnit, setBatchUnit] = useState<'g' | 'ml'>(v.batch_output_unit ?? 'g');
-  const [servingQty, setServingQty] = useState(numStr(v.serving_qty));
-  const [servingUnit, setServingUnit] = useState<'g' | 'ml'>(v.serving_unit ?? 'g');
-  const [density, setDensity] = useState(numStr(v.output_density_g_per_ml));
-
-  const save = useAction(() =>
-    rpc('record_yield', {
-      p_version_id: v.id,
-      p: {
-        batch_output_qty: toNum(batchQty) ?? '',
-        batch_output_unit: batchUnit,
-        serving_qty: toNum(servingQty) ?? '',
-        serving_unit: servingUnit,
-        output_density_g_per_ml: toNum(density) ?? '',
-      },
-    }),
-  );
-
-  return (
-    <Sheet
-      open
-      onClose={onClose}
-      title={`記錄實際產量：${v.recipe.name} v${v.version_no}`}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            取消
-          </Button>
-          <Button
-            block
-            loading={save.isPending}
-            onClick={() =>
-              save.mutate(undefined, {
-                onSuccess: () => {
-                  toast('已記錄實際產量');
-                  onClose();
-                },
-              })
-            }
-          >
-            儲存
-          </Button>
-        </>
-      }
-    >
-      <p className="text-sm text-muted">
-        產量是試做後量出來的結果，所以「試菜中」還可以記錄。用料、步驟等食譜內容仍然凍結，要改請複製為新版本。
-      </p>
-      {!isDish && (
-        <QtyUnitField
-          label="批次產量"
-          hint="實際過濾或完成後秤到的量"
-          qty={batchQty}
-          unit={batchUnit}
-          onChange={(qty, unit) => (setBatchQty(qty), setBatchUnit(unit))}
-        />
-      )}
-      <QtyUnitField
-        label={isDish ? '每份克重' : '每份量'}
-        hint={isDish ? '出餐時整份秤重' : '一碗或一份實際舀多少'}
-        qty={servingQty}
-        unit={servingUnit}
-        onChange={(qty, unit) => (setServingQty(qty), setServingUnit(unit))}
-      />
-      <Field label="成品密度 g/ml（選填）" hint="產量用 ml 記錄、但要算出成率時需要；湯底約 1.0">
-        {(id) => <NumberInput id={id} value={density} onChange={setDensity} />}
-      </Field>
-    </Sheet>
-  );
-}
-
 function TransitionSheet({
   v,
   transition,
@@ -714,23 +554,20 @@ function TransitionSheet({
   const toast = useToast();
   const [comment, setComment] = useState('');
   const hints = useMemo(() => {
+    if (transition.to !== 'locked') return [];
     const list: string[] = [];
-    if (transition.to === 'testing' || transition.to === 'pending_approval' || transition.to === 'locked') {
-      if (v.lines.some((l) => l.quantity === null)) list.push('有用料的用量待填');
-      if (v.lines.length === 0) list.push('還沒有用料');
+    if (v.lines.length === 0) list.push('還沒有用料');
+    if (v.lines.some((l) => l.quantity === null)) list.push('有用料的用量待填');
+    if (v.recipe.type === 'dish' ? v.serving_qty === null : v.batch_output_qty === null || v.serving_qty === null) {
+      list.push(v.recipe.type === 'dish' ? '每份克重還沒填' : '批次產量或每份量還沒填');
     }
-    if ((transition.to === 'pending_approval' || transition.to === 'locked') && view && !view.cost.isComplete) {
-      list.push(...view.cost.issues);
-    }
-    if (transition.to === 'locked') {
-      for (const l of v.lines) {
-        if (l.line_kind === 'component' && l.component_status !== 'locked') {
-          list.push(`「${l.component_name}」v${l.component_version_no} 尚未定版`);
-        }
+    for (const l of v.lines) {
+      if (l.line_kind === 'component' && l.component_status !== 'locked') {
+        list.push(`「${l.component_name}」v${l.component_version_no} 要先定版`);
       }
     }
-    return [...new Set(list)];
-  }, [transition, v, view]);
+    return list;
+  }, [transition, v]);
 
   const run = useAction(() => {
     return rpc('transition_version', { p_version_id: v.id, p_to: transition.to, p_comment: comment });
@@ -743,7 +580,7 @@ function TransitionSheet({
       title={`${transition.label}：${v.recipe.name} v${v.version_no}`}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" className="shrink-0" onClick={onClose}>
             取消
           </Button>
           <Button
@@ -770,12 +607,11 @@ function TransitionSheet({
         <span aria-hidden>→</span>
         <StatusBadge status={transition.to} />
       </div>
-      {transition.to === 'testing' && <p className="text-sm text-muted">送試菜後內容會凍結；之後要修改只能複製為新版本。</p>}
       {transition.to === 'locked' && (
-        <p className="text-sm text-muted">定版後內容永久不可修改，同一食譜舊的定版會自動停用，並保存今天的成本快照。</p>
+        <p className="text-sm text-muted">定版後內容不能再改，要改就複製為新版本；同一食譜舊的定版會自動退下來。</p>
       )}
       {hints.length > 0 && (
-        <Notice tone="warn" title="可能無法通過">
+        <Notice tone="warn" title="這些項目填齊才能定版">
           <ul className="list-disc pl-5">
             {hints.map((h) => (
               <li key={h}>{h}</li>
@@ -788,11 +624,11 @@ function TransitionSheet({
           {(id) => <Textarea id={id} value={comment} onChange={(e) => setComment(e.target.value)} rows={4} />}
         </Field>
       )}
-      {view && transition.to === 'locked' && view.cost.isComplete && (
+      {view && transition.to === 'locked' && (
         <p className="text-sm">
-          定版成本：每份 ${formatServingCost(view.cost.servingCost)}
-          {view.metrics.foodCostRate && `、食材成本率 ${formatPercent(view.metrics.foodCostRate)}`}
-          。實際寫入的快照由資料庫依今天的單價重新計算。
+          {view.cost.isComplete
+            ? `定版成本：每份 ${servingCostLabel(view)}${v.recipe.type === 'dish' ? `、食材成本率 ${foodCostRateLabel(view)}` : ''}。`
+            : `成本還不完整（每份${servingCostLabel(view)}）也可以定版，之後補上單價，成本就會更新。`}
         </p>
       )}
     </Sheet>

@@ -4,7 +4,6 @@ export const ROLE_LABEL: Record<Role, string> = {
   founder: '創辦人',
   chef: '研發／主廚',
   manager: '店長',
-  tester: '測試人員',
   pending: '待審核',
 };
 
@@ -63,29 +62,6 @@ export const HEAT_LABEL: Record<string, string> = {
   low: '小火',
   simmer: '微火',
 };
-
-export const MENU_READY_LABEL: Record<string, string> = {
-  yes: '可以上菜單',
-  maybe: '再調整',
-  no: '不建議',
-};
-
-export const DECISION_LABEL: Record<string, string> = {
-  next_round: '進入下一輪',
-  adjust: '需要調整',
-  drop: '淘汰',
-  ready: '可以定版',
-};
-
-export const DECISION_TONE: Record<string, 'ok' | 'warn' | 'danger' | 'info'> = {
-  next_round: 'info',
-  adjust: 'warn',
-  drop: 'danger',
-  ready: 'ok',
-};
-
-export const SALTINESS_LABELS = ['太淡', '偏淡', '剛好', '偏鹹', '太鹹'];
-export const OILINESS_LABELS = ['太清', '清爽', '剛好', '偏油', '太油'];
 
 export const TABLE_LABEL: Record<string, string> = {
   profiles: '帳號',

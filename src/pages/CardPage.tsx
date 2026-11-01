@@ -159,10 +159,10 @@ export function CardPage() {
               <StatusBadge status={v.status} />
               {v.status === 'locked' ? (
                 <span>
-                  {formatDate(v.approved_at)} 定版・核准人 {v.approved_by_name ?? '—'}
+                  {formatDate(v.approved_at)} 定版・{v.approved_by_name ?? '—'}
                 </span>
               ) : (
-                <span className="font-semibold text-red-700">{STATUS_LABEL[v.status]}，僅供試做參考</span>
+                <span className="font-semibold text-red-700">{STATUS_LABEL[v.status]}，還不是正式版本</span>
               )}
             </div>
           </div>

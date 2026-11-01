@@ -29,8 +29,6 @@ const READS_FOR_KITCHEN_ROLES: Array<[string, () => Record<string, unknown>]> = 
   ['get_recipe', () => ({ p_id: recipeId })],
   ['get_version', () => ({ p_id: versionId })],
   ['get_costing_bundle', () => ({ p_version_ids: [versionId] })],
-  ['list_tasting_sessions', () => ({})],
-  ['list_team_members', () => ({})],
 ];
 
 describe('讀取權限', () => {
@@ -44,16 +42,15 @@ describe('讀取權限', () => {
     await expectError(t.rpc(null, fn, args()), '請先登入');
   });
 
-  it('待審核帳號連首頁與試菜任務都不能讀', async () => {
+  it('待審核帳號連首頁都不能讀', async () => {
     await expectError(t.rpc(t.users.pending, 'get_dashboard'), '權限不足');
-    await expectError(t.rpc(t.users.pending, 'get_my_tasting_tasks'), '權限不足');
     const me = await t.rpc<{ role: string }>(t.users.pending, 'me');
     expect(me.role).toBe('pending');
   });
 
-  it('測試人員的首頁只有試菜任務數，沒有成本或食譜資料', async () => {
-    const d = await t.rpc<Record<string, unknown>>(t.users.tester, 'get_dashboard');
-    expect(Object.keys(d).sort()).toEqual(['my_open_tasting_tasks', 'role']);
+  it('舊的測試人員角色讀不到任何首頁資料；也不能再指派這個角色', async () => {
+    await expectError(t.rpc(t.users.tester, 'get_dashboard'), '權限不足');
+    await expectError(t.rpc(t.users.founder, 'assign_role', { p_user_id: t.users.pending, p_role: 'tester' }), '無效的角色');
   });
 
   it('只有創辦人可以看帳號清單與全部資料匯出', async () => {
@@ -91,7 +88,7 @@ describe('寫入權限', () => {
     );
     await expectError(t.rpc(t.users.manager, 'copy_version', { p_source_id: versionId }), '權限不足');
     await expectError(
-      t.rpc(t.users.manager, 'transition_version', { p_version_id: versionId, p_to: 'testing', p_comment: '' }),
+      t.rpc(t.users.manager, 'transition_version', { p_version_id: versionId, p_to: 'locked', p_comment: '' }),
       '權限不足',
     );
   });
@@ -100,7 +97,6 @@ describe('寫入權限', () => {
     await expectError(t.rpc(t.users.tester, 'upsert_ingredient', { p: { name: 'x', base_dimension: 'mass' } }), '權限不足');
     await expectError(t.rpc(t.users.tester, 'upsert_supplier', { p: { name: 'x' } }), '權限不足');
     await expectError(t.rpc(t.users.tester, 'create_recipe', { p: { type: 'dish', name: 'x' } }), '權限不足');
-    await expectError(t.rpc(t.users.tester, 'create_tasting_session', { p: { tasted_on: '2026-09-22', items: [] } }), '權限不足');
   });
 
   it('只有創辦人可以：設定售價、作廢單價、指派角色、修改設定', async () => {
@@ -109,7 +105,7 @@ describe('寫入權限', () => {
         t.rpc(t.users[role], 'set_menu_price', { p_recipe_id: recipeId, p_price: 150, p_effective_date: '2026-09-01', p_note: '' }),
         '權限不足',
       );
-      await expectError(t.rpc(t.users[role], 'assign_role', { p_user_id: t.users.pending, p_role: 'tester' }), '權限不足');
+      await expectError(t.rpc(t.users[role], 'assign_role', { p_user_id: t.users.pending, p_role: 'chef' }), '權限不足');
       await expectError(t.rpc(t.users[role], 'update_settings', { p_patch: { price_round_to: 10 } }), '權限不足');
     }
     const prices = await t.sql<{ id: string }>('select id from app.purchase_prices limit 1');

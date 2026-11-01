@@ -8,7 +8,7 @@
 
 轉換規則（不猜數字：沒有寫克重或毫升的，用量一律留空，系統顯示「用量待填」）：
 - 「基湯食譜」每一列 → 元件（湯底）v1。原料欄一行一項；「1 隻」「適量」這類寫法沒辦法換成重量，
-  用量留空、原文寫進處理方式。用量都填齊才會自動送「試菜中」。
+  用量留空、原文寫進處理方式。匯入後都是草案，填齊後再定版。
 - 「菜單食譜」每一列 → 菜品 v1 草案。
   - 「基底湯／液體」「麵量」→ 用料
   - 「材料」是整批醬料的配方 → 另外建立元件（醬料），「醬料做法」是它的步驟；菜品引用這個醬料，每份用量留空
@@ -220,7 +220,6 @@ def build_dishes(ws, standard_ws, registry: Registry, soup_names: list[str]) -> 
                     "type": "component",
                     "component_kind": "sauce",
                     "description": f"基準版：「{name}」的整批醬料配方（第一版試作基準，需經實際試菜校正）",
-                    "to_testing": all(line["quantity"] for line in sauce_lines),
                     "version": version(
                         ["批次產量與每份用量還沒有量，試做後再記錄。"],
                         sauce_lines,
@@ -269,7 +268,6 @@ def build_dishes(ws, standard_ws, registry: Registry, soup_names: list[str]) -> 
                 "type": "dish",
                 "menu_category": category,
                 "description": "基準版（第一版試作基準，需經實際試菜校正）",
-                "to_testing": False,
                 "version": version(notes, lines, steps, serving_qty=None, serving_unit="g"),
             }
         )
@@ -306,7 +304,6 @@ def build_soups(ws, registry: Registry, dishes: list[dict]) -> list[dict]:
                 "type": "component",
                 "component_kind": "soup",
                 "description": "基準版（第一版試作基準，需經實際試菜校正）",
-                "to_testing": bool(lines) and all(line["quantity"] for line in lines),
                 "version": version(
                     notes,
                     lines,
@@ -376,9 +373,6 @@ def main() -> None:
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"輸出 {out}")
     print(f"原物料 {len(registry.items)} 項、湯底 {len(soups)} 個、醬料 {len(sauces)} 個、菜品 {len(dishes)} 道")
-    pending = [r["name"] for r in soups + sauces if not r["to_testing"]]
-    if pending:
-        print("用量還沒填齊、不會自動送試菜的元件：" + "、".join(pending))
 
 
 if __name__ == "__main__":

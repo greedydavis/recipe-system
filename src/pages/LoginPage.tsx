@@ -51,7 +51,7 @@ export function LoginPage() {
         <div className="text-4xl" aria-hidden>
           🍜
         </div>
-        <h1 className="mt-2 text-2xl font-bold text-brand-700">試菜與標準食譜系統</h1>
+        <h1 className="mt-2 text-2xl font-bold text-brand-700">標準食譜系統</h1>
         <p className="mt-1 text-sm text-muted">麵店籌備團隊內部使用</p>
       </div>
 

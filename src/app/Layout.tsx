@@ -1,4 +1,4 @@
-import { BookOpen, ClipboardCheck, Home, Menu, Package } from 'lucide-react';
+import { BookOpen, Home, Menu, Package } from 'lucide-react';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { cx } from '../components/ui';
@@ -9,11 +9,10 @@ import { ROLE_LABEL } from '../i18n/labels';
 import { useAuth } from './auth';
 
 const NAV: Array<{ to: string; label: string; icon: typeof Home; roles: Role[]; end?: boolean }> = [
-  { to: '/', label: '首頁', icon: Home, roles: ['founder', 'chef', 'manager', 'tester'], end: true },
+  { to: '/', label: '首頁', icon: Home, roles: ['founder', 'chef', 'manager'], end: true },
   { to: '/recipes', label: '食譜', icon: BookOpen, roles: ['founder', 'chef', 'manager'] },
-  { to: '/tastings', label: '試菜', icon: ClipboardCheck, roles: ['founder', 'chef', 'manager', 'tester'] },
   { to: '/ingredients', label: '原物料', icon: Package, roles: ['founder', 'chef', 'manager'] },
-  { to: '/more', label: '更多', icon: Menu, roles: ['founder', 'chef', 'manager', 'tester'] },
+  { to: '/more', label: '更多', icon: Menu, roles: ['founder', 'chef', 'manager'] },
 ];
 
 export function Layout() {
@@ -32,7 +31,7 @@ export function Layout() {
 
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-white md:flex">
         <div className="px-5 py-5">
-          <div className="text-lg font-bold text-brand-700">試菜與標準食譜</div>
+          <div className="text-lg font-bold text-brand-700">標準食譜系統</div>
           {me && (
             <div className="mt-1 text-sm text-muted">
               {me.display_name}・{ROLE_LABEL[me.role]}

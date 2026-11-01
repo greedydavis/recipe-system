@@ -406,7 +406,7 @@ export function SearchInput({
   );
 }
 
-/** 選項按鈕（評分、切換） */
+/** 選項按鈕（單選、切換） */
 export function ChipGroup<T extends string | number>({
   options,
   value,

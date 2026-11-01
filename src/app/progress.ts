@@ -22,10 +22,8 @@ export type BlockerKind =
   | 'missing_price'
   | 'missing_quantity'
   | 'missing_yield'
-  | 'no_feedback'
-  | 'not_in_testing'
-  | 'outdated_component'
-  | 'pending_approval';
+  | 'not_locked'
+  | 'outdated_component';
 
 export interface BlockerGroup {
   kind: BlockerKind;
@@ -112,14 +110,13 @@ export function summarizeProgress(
 
   const missingQuantity = current.filter((c) => hasIssue(c, (i) => i.includes('用量待填')));
   const missingYield = current.filter((c) => hasIssue(c, (i) => i.includes('產量未填') || i.includes('每份量未填')));
-  const notInTesting = current.filter((c) => c.stage === 'draft');
-  const noFeedback = (dashboard?.testing_versions ?? []).filter((v) => v.feedback_count === 0);
+  const notLocked = current.filter((c) => c.stage === 'draft');
 
   const allGroups: BlockerGroup[] = [
     {
       kind: 'missing_price',
       title: '原物料沒有單價',
-      hint: '沒有單價就算不出成本，送核准會被擋下',
+      hint: '沒有單價就算不出完整成本；可以先定版，之後再補',
       items: (dashboard?.missing_price_ingredients ?? []).map((i) => ({
         id: i.id,
         label: i.name,
@@ -129,30 +126,20 @@ export function summarizeProgress(
     {
       kind: 'missing_quantity',
       title: '用料的用量還沒填',
-      hint: '送試菜前要填齊',
+      hint: '定版前要填齊',
       items: missingQuantity.map((c) => ({ id: c.versionId, label: `${c.recipe.name} v${c.versionNo}`, to: versionLink(c) })),
     },
     {
       kind: 'missing_yield',
-      title: '還沒記錄實際產量',
-      hint: '試做完秤出成品量再填；送核准前必須填',
+      title: '產量還沒填',
+      hint: '定版前要填齊',
       items: missingYield.map((c) => ({ id: c.versionId, label: `${c.recipe.name} v${c.versionNo}`, to: versionLink(c) })),
     },
     {
-      kind: 'not_in_testing',
-      title: '還沒送試菜',
-      hint: '草案內容還會變動，要送試菜才能安排試做',
-      items: notInTesting.map((c) => ({ id: c.versionId, label: `${c.recipe.name} v${c.versionNo}`, to: versionLink(c) })),
-    },
-    {
-      kind: 'no_feedback',
-      title: '試菜中但還沒有人評分',
-      hint: '預設要有一筆評分才能送核准',
-      items: noFeedback.map((v) => ({
-        id: v.version_id,
-        label: `${v.recipe_name} v${v.version_no}`,
-        to: `/versions/${v.version_id}`,
-      })),
+      kind: 'not_locked',
+      title: '還沒定版',
+      hint: '內容填齊後，由創辦人按「定版」',
+      items: notLocked.map((c) => ({ id: c.versionId, label: `${c.recipe.name} v${c.versionNo}`, to: versionLink(c) })),
     },
     {
       kind: 'outdated_component',
@@ -162,16 +149,6 @@ export function summarizeProgress(
         id: `${r.version_id}-${r.component_name}`,
         label: `${r.recipe_name} v${r.version_no}（${r.component_name} v${r.component_version_no}）`,
         to: `/versions/${r.version_id}`,
-      })),
-    },
-    {
-      kind: 'pending_approval',
-      title: '等創辦人核准',
-      hint: '核准後就成為現行定版',
-      items: (dashboard?.pending_approvals ?? []).map((v) => ({
-        id: v.version_id,
-        label: `${v.recipe_name} v${v.version_no}`,
-        to: `/versions/${v.version_id}`,
       })),
     },
   ];

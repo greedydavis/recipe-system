@@ -15,7 +15,7 @@ const BAR_COLOR: Record<VersionStatus, string> = {
   retired: 'bg-zinc-200',
 };
 
-const STAGES: VersionStatus[] = ['locked', 'pending_approval', 'testing', 'draft', 'retired'];
+const STAGES: VersionStatus[] = ['locked', 'draft', 'retired'];
 
 export function ProgressPage() {
   const { summary, isLoading, costsLoading, error, hasRecipes } = useProgress();

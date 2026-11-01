@@ -8,7 +8,6 @@ import {
   Badge,
   Button,
   Card,
-  Checkbox,
   EmptyState,
   ErrorState,
   Field,
@@ -242,7 +241,6 @@ export function SettingsPage() {
     target: rateToPercentInput(s.target_food_cost_rate),
     tax: rateToPercentInput(s.sales_tax_rate),
     round: String(s.price_round_to),
-    requireTasting: s.require_tasting_before_approval,
   };
   const set = (k: string, v: string | boolean) => setDraft({ ...values, [k]: v });
 
@@ -260,12 +258,6 @@ export function SettingsPage() {
         <Field label="建議售價進位到（元）" hint="無條件進位到這個數字的倍數">
           {(id) => <NumberInput id={id} value={values.round as string} onChange={(v) => set('round', v)} disabled={!editable} />}
         </Field>
-        <Checkbox
-          checked={values.requireTasting as boolean}
-          onChange={(v) => set('requireTasting', v)}
-          disabled={!editable}
-          label="試菜中的版本送核准前，必須至少有一筆試吃評分"
-        />
         {editable && (
           <Button
             block
@@ -278,7 +270,6 @@ export function SettingsPage() {
                   target_food_cost_rate: Number(percentInputToRate(values.target as string) ?? 0),
                   sales_tax_rate: Number(percentInputToRate(values.tax as string) ?? 0),
                   price_round_to: toNum(values.round as string) ?? 0,
-                  require_tasting_before_approval: values.requireTasting,
                 },
                 { onSuccess: () => (setDraft(null), toast('已儲存設定')) },
               )
@@ -406,7 +397,7 @@ export function DataPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `試菜與標準食譜系統_備份_${todayIso()}.json`;
+      a.download = `標準食譜系統_備份_${todayIso()}.json`;
       a.click();
       // 立刻撤銷網址時，部分手機瀏覽器會取消下載
       setTimeout(() => URL.revokeObjectURL(url), 10_000);

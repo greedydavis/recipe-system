@@ -5,18 +5,16 @@ import type { ProgressSummary } from '../app/progress';
 import { useProgress } from '../app/useProgress';
 import { formatDateTime, todayIso } from '../app/format';
 import { useMe } from '../app/auth';
-import { Badge, Card, EmptyState, ErrorState, Loading, Section, StatusBadge } from '../components/ui';
+import { Badge, Card, ErrorState, Loading, Section, StatusBadge } from '../components/ui';
 import { useRpc } from '../data/api';
-import type { Dashboard, MyTastingTask, ScheduleTask } from '../data/types';
+import type { Dashboard, ScheduleTask } from '../data/types';
 import { formatPercent } from '../domain/format';
 import { taskState } from '../domain/schedule';
 import { ROLE_LABEL } from '../i18n/labels';
-import { TastingTaskCard } from './TastingPages';
 
 export function HomePage() {
   const me = useMe();
   const dash = useRpc<Dashboard>('get_dashboard');
-  const tasks = useRpc<MyTastingTask[]>('get_my_tasting_tasks');
 
   return (
     <div className="space-y-6">
@@ -28,26 +26,8 @@ export function HomePage() {
       {dash.isLoading && <Loading />}
       {dash.error && <ErrorState error={dash.error} onRetry={() => dash.refetch()} />}
 
-      <MyTasks tasks={tasks.data} loading={tasks.isLoading} />
-
-      {dash.data && me.role !== 'tester' && <KitchenDashboard data={dash.data} />}
+      {dash.data && <KitchenDashboard data={dash.data} />}
     </div>
-  );
-}
-
-function MyTasks({ tasks, loading }: { tasks?: MyTastingTask[]; loading: boolean }) {
-  const open = (tasks ?? []).filter((t) => !t.my_feedback && t.can_submit);
-  const done = (tasks ?? []).filter((t) => t.my_feedback);
-  if (loading) return null;
-  if (!tasks || tasks.length === 0) return null;
-  return (
-    <Section title={`我的試吃評分（待填 ${open.length}）`}>
-      <div className="space-y-2">
-        {[...open, ...done].slice(0, 8).map((t) => (
-          <TastingTaskCard key={t.item_id} task={t} />
-        ))}
-      </div>
-    </Section>
   );
 }
 
@@ -116,29 +96,10 @@ function KitchenDashboard({ data }: { data: Dashboard }) {
       <ScheduleCard />
       {!progress.isLoading && <ProgressCard summary={progress.summary} />}
       <div className="grid grid-cols-3 gap-2">
-        <Stat label="待核准" value={data.pending_approvals?.length ?? 0} target="pending" />
-        <Stat label="試菜中" value={data.testing_versions?.length ?? 0} target="testing" />
-        <Stat label="草案" value={data.draft_count ?? 0} to="/recipes" />
+        <Stat label="草案" value={data.draft_count ?? 0} />
+        <Stat label="菜品已定版" value={progress.summary.dishes.locked} />
+        <Stat label="元件已定版" value={progress.summary.components.locked} />
       </div>
-
-      <Section title="待核准" className="scroll-mt-4">
-        <div id="pending" className="scroll-mt-4" />
-        {(data.pending_approvals ?? []).length === 0 ? (
-          <EmptyState title="目前沒有待核准的版本" />
-        ) : (
-          <div className="space-y-2">
-            {data.pending_approvals!.map((v) => (
-              <VersionRow
-                key={v.version_id}
-                to={`/versions/${v.version_id}`}
-                title={`${v.recipe_name} v${v.version_no}`}
-                subtitle={`${v.submitted_by_name ?? ''} 於 ${formatDateTime(v.submitted_at)} 送審`}
-                badge={<StatusBadge status="pending_approval" />}
-              />
-            ))}
-          </div>
-        )}
-      </Section>
 
       {(overTarget.length > 0 || (data.missing_price_ingredients ?? []).length > 0 || (data.outdated_references ?? []).length > 0) && (
         <Section title="需要注意">
@@ -169,25 +130,6 @@ function KitchenDashboard({ data }: { data: Dashboard }) {
         <p className="text-sm text-muted">另有 {incompleteCount} 道菜品成本不完整（缺用量、單價或單位換算），無法判斷是否超過目標成本率。</p>
       )}
 
-      <Section title="試菜中">
-        <div id="testing" className="scroll-mt-4" />
-        {(data.testing_versions ?? []).length === 0 ? (
-          <EmptyState title="目前沒有試菜中的版本" />
-        ) : (
-          <div className="space-y-2">
-            {data.testing_versions!.map((v) => (
-              <VersionRow
-                key={v.version_id}
-                to={`/versions/${v.version_id}`}
-                title={`${v.recipe_name} v${v.version_no}`}
-                subtitle={`${v.feedback_count} 筆評分${v.title ? `・${v.title}` : ''}`}
-                badge={<StatusBadge status="testing" />}
-              />
-            ))}
-          </div>
-        )}
-      </Section>
-
       <Section title="最近更新">
         <div className="space-y-2">
           {(data.recent_versions ?? []).map((v) => (
@@ -205,26 +147,15 @@ function KitchenDashboard({ data }: { data: Dashboard }) {
   );
 }
 
-function Stat({ label, value, to, target }: { label: string; value: number; to?: string; target?: string }) {
-  const body = (
-    <Card className="text-center hover:bg-brand-50">
-      <div className="text-2xl font-bold text-brand-700 tabular-nums">{value}</div>
-      <div className="text-sm text-muted">{label}</div>
-    </Card>
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <Link to="/recipes">
+      <Card className="text-center hover:bg-brand-50">
+        <div className="text-2xl font-bold text-brand-700 tabular-nums">{value}</div>
+        <div className="text-sm text-muted">{label}</div>
+      </Card>
+    </Link>
   );
-  // 路由用的是網址的 # 部分，所以不能用 <a href="#pending">（會被當成另一個頁面）
-  if (target) {
-    return (
-      <button
-        type="button"
-        className="block w-full text-left"
-        onClick={() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-      >
-        {body}
-      </button>
-    );
-  }
-  return <Link to={to ?? '/'}>{body}</Link>;
 }
 
 function VersionRow({ to, title, subtitle, badge }: { to: string; title: string; subtitle: string; badge: ReactNode }) {

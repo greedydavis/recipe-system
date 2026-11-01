@@ -259,7 +259,7 @@ export async function createDemoBackend(): Promise<Backend> {
         `select p.id, p.display_name, p.role, u.email
          from app.profiles p join auth.users u on u.id = p.id
          where p.is_active
-         order by array_position(array['founder','chef','manager','tester','pending'], p.role), u.created_at`,
+         order by array_position(array['founder','chef','manager','pending'], p.role), u.created_at`,
       );
       return res.rows;
     },

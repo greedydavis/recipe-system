@@ -4,7 +4,7 @@ import { diffLines, diffSteps } from './diff';
 import { altUnitHint, formatPercent, formatQty, formatServingCost, formatUnitCost } from './format';
 import { priceMetrics, suggestedPrice } from './pricing';
 import { scaleFactor } from './scaling';
-import { STATUSES, availableTransitions, canReceiveFeedback, isReferenceable, transitionRoles } from './status';
+import { STATUSES, availableTransitions, isReferenceable, transitionRoles } from './status';
 import { DEFAULT_SETTINGS, version } from './__fixtures__/builders';
 
 describe('售價與毛利', () => {
@@ -100,22 +100,22 @@ describe('顯示進位', () => {
 });
 
 describe('狀態轉移表', () => {
-  it('只有創辦人能核准、退回與停用已定版', () => {
-    expect(transitionRoles('pending_approval', 'locked')).toEqual(['founder']);
+  it('只有創辦人能定版與停用已定版', () => {
+    expect(transitionRoles('draft', 'locked')).toEqual(['founder']);
     expect(transitionRoles('locked', 'retired')).toEqual(['founder']);
-    expect(transitionRoles('draft', 'testing')).toEqual(['founder', 'chef']);
   });
 
   it('停用是終點；不存在的轉移回傳 null', () => {
     for (const to of STATUSES) expect(transitionRoles('retired', to)).toBeNull();
     expect(transitionRoles('locked', 'draft')).toBeNull();
-    expect(transitionRoles('draft', 'locked')).toBeNull();
+    expect(transitionRoles('draft', 'testing')).toBeNull();
+    expect(transitionRoles('draft', 'retired')).toBeNull();
   });
 
-  it('店長與測試人員沒有任何轉移', () => {
+  it('主廚與店長沒有任何轉移', () => {
     for (const from of STATUSES) {
+      expect(availableTransitions(from, 'chef')).toEqual([]);
       expect(availableTransitions(from, 'manager')).toEqual([]);
-      expect(availableTransitions(from, 'tester')).toEqual([]);
     }
   });
 });
@@ -169,9 +169,10 @@ describe('版本比較', () => {
   });
 });
 
-describe('可以引用與評分的狀態', () => {
-  it('凍結的版本可以被引用、加入試菜；只有試菜中與待核准收評分', () => {
-    expect(STATUSES.filter(isReferenceable)).toEqual(['testing', 'pending_approval', 'locked']);
-    expect(STATUSES.filter(canReceiveFeedback)).toEqual(['testing', 'pending_approval']);
+describe('可以引用的狀態', () => {
+  it('停用以外的版本都可以被引用', () => {
+    expect(isReferenceable('draft')).toBe(true);
+    expect(isReferenceable('locked')).toBe(true);
+    expect(isReferenceable('retired')).toBe(false);
   });
 });

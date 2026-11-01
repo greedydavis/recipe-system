@@ -1,6 +1,6 @@
 import { type Page, expect } from '@playwright/test';
 
-export type DemoUser = '示範創辦人' | '示範主廚' | '示範店長' | '示範試吃員甲' | '示範試吃員乙';
+export type DemoUser = '示範創辦人' | '示範主廚' | '示範店長';
 
 /** 開啟網站（第一次會在瀏覽器建立示範資料庫，約 10–20 秒）並以示範帳號登入 */
 export async function loginAs(page: Page, user: DemoUser) {
@@ -10,7 +10,7 @@ export async function loginAs(page: Page, user: DemoUser) {
 }
 
 /** 底部主選單 */
-export async function nav(page: Page, label: '首頁' | '食譜' | '試菜' | '原物料' | '更多') {
+export async function nav(page: Page, label: '首頁' | '食譜' | '原物料' | '更多') {
   await page.getByRole('navigation', { name: '主選單' }).getByRole('link', { name: label }).click();
 }
 

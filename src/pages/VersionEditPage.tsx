@@ -201,6 +201,8 @@ export function VersionEditPage() {
 
   const save = useAction(async (f: DraftForm) => {
     const newRevision = await rpc<number>('save_version_draft', { p_version_id: id, p_revision: revision, p: payloadFromForm(f) });
+    // 儲存後會重新讀取版本；要在那之前記下新的 revision，否則表單會被讀回來的資料蓋掉（菜品的批次產量由資料庫帶入，畫面就誤判成未儲存）
+    loadedFor.current = `${id}:${newRevision}`;
     return { newRevision, json: JSON.stringify(payloadFromForm(f)) };
   });
 
@@ -227,7 +229,6 @@ export function VersionEditPage() {
       onSuccess: ({ newRevision, json }) => {
         setRevision(newRevision);
         setSavedJson(json);
-        loadedFor.current = `${v.id}:${newRevision}`;
         setForm((f) => (f ? { ...f, steps: f.steps.map((s) => ({ ...s, persisted: true })) } : f));
         toast('已儲存草案');
       },
@@ -259,11 +260,11 @@ export function VersionEditPage() {
 
       <Section title="產量">
         <Card className="space-y-3">
-          <p className="text-sm text-muted">產量是試做完秤出來的結果，可以先留空，試菜當天量到多少再回來填；送核准前才需要填齊。</p>
+          <p className="text-sm text-muted">可以先留空，草案隨時都能回來填；按「定版」前要填齊。</p>
           {isDish ? (
             <QtyUnitField
               label="每份克重（成品一份的重量或容量）"
-              hint="出餐時整份秤重；試做後再填也可以"
+              hint="出餐時整份秤重"
               qty={form.serving_qty}
               unit={form.serving_unit}
               onChange={(qty, unit) => update({ serving_qty: qty, serving_unit: unit })}
@@ -272,14 +273,14 @@ export function VersionEditPage() {
             <>
               <QtyUnitField
                 label="批次產量（實際過濾或完成後的量）"
-                hint="試做後量出來的實際成品量；試做前可以先留空"
+                hint="實際過濾或完成後秤到的量"
                 qty={form.batch_output_qty}
                 unit={form.batch_output_unit}
                 onChange={(qty, unit) => update({ batch_output_qty: qty, batch_output_unit: unit })}
               />
               <QtyUnitField
                 label="每份量（一碗或一份使用多少）"
-                hint="一碗要舀多少；試做時確認後再填也可以"
+                hint="一碗要舀多少"
                 qty={form.serving_qty}
                 unit={form.serving_unit}
                 onChange={(qty, unit) => update({ serving_qty: qty, serving_unit: unit })}
@@ -442,7 +443,7 @@ export function VersionEditPage() {
       {picker === 'component' && (
         <VersionPicker
           title="加入元件"
-          hint="只能引用已凍結的版本（試菜中、待核准、已定版）。菜品要定版時，引用的元件也必須是已定版。"
+          hint="草案和已定版的版本都可以引用；菜品要定版時，引用的元件必須已定版。"
           type="component"
           excludeRecipeId={v.recipe.id}
           showRecipeLink

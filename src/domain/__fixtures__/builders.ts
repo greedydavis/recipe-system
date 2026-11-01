@@ -14,7 +14,6 @@ export const DEFAULT_SETTINGS: Settings = {
   target_food_cost_rate: 0.35,
   sales_tax_rate: 0.05,
   price_round_to: 5,
-  require_tasting_before_approval: true,
 };
 
 let seq = 0;
@@ -94,7 +93,7 @@ export function version(opts: {
     recipe_type: opts.type,
     recipe_name: opts.name,
     version_no: 1,
-    status: 'testing',
+    status: 'draft',
     batch_output_qty: batch ? batch[0] : null,
     batch_output_unit: batch ? batch[1] : null,
     serving_qty: serving ? serving[0] : null,

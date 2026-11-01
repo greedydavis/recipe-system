@@ -93,5 +93,4 @@ export const can = {
   setPrice: (r: Role) => r === 'founder',
   admin: (r: Role) => r === 'founder',
   viewAudit: (r: Role) => r === 'founder' || r === 'chef',
-  runTasting: (r: Role) => r === 'founder' || r === 'chef' || r === 'manager',
 };

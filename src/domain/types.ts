@@ -2,7 +2,7 @@ export type Dimension = 'mass' | 'volume' | 'count';
 export type RecipeType = 'dish' | 'component';
 export type ComponentKind = 'soup' | 'sauce' | 'topping' | 'noodle' | 'other';
 export type VersionStatus = 'draft' | 'testing' | 'pending_approval' | 'locked' | 'retired';
-export type Role = 'founder' | 'chef' | 'manager' | 'tester' | 'pending';
+export type Role = 'founder' | 'chef' | 'manager' | 'pending';
 export type OutputUnit = 'g' | 'ml';
 export type LineKind = 'ingredient' | 'component';
 export type NumLike = number | string;
@@ -77,7 +77,6 @@ export interface Settings {
   target_food_cost_rate: number;
   sales_tax_rate: number;
   price_round_to: number;
-  require_tasting_before_approval: boolean;
 }
 
 export interface CostingBundle {

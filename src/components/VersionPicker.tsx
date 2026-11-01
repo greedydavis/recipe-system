@@ -8,15 +8,13 @@ import { COMPONENT_KIND_LABEL, RECIPE_TYPE_LABEL } from '../i18n/labels';
 import { Button, Loading, SearchInput, Sheet, StatusBadge } from './ui';
 
 /**
- * 先選食譜、再選版本。只有內容已凍結的版本（試菜中、待核准、已定版）可以選；
- * 引用元件與加入試菜場次都用這一個。
+ * 先選元件、再選版本。草案和已定版的版本都可以引用，停用的不行；菜品定版時才要求元件已定版。
  */
 export function VersionPicker({
   title,
   hint,
   type = null,
   excludeRecipeId,
-  excludeVersionIds = [],
   showRecipeLink,
   onPick,
   onClose,
@@ -26,7 +24,6 @@ export function VersionPicker({
   /** 只列出菜品或元件；null 是兩種都列 */
   type?: RecipeType | null;
   excludeRecipeId?: string;
-  excludeVersionIds?: string[];
   showRecipeLink?: boolean;
   onPick: (recipe: RecipeDetail, version: RecipeDetail['versions'][number]) => void;
   onClose: () => void;
@@ -75,7 +72,7 @@ export function VersionPicker({
                 <button
                   key={ver.id}
                   type="button"
-                  disabled={!isReferenceable(ver.status) || excludeVersionIds.includes(ver.id)}
+                  disabled={!isReferenceable(ver.status)}
                   onClick={() => onPick(detail.data!, ver)}
                   className="flex min-h-12 w-full items-center gap-2 rounded-xl px-3 py-2 text-left ring-1 ring-line hover:bg-brand-50 disabled:opacity-50"
                 >

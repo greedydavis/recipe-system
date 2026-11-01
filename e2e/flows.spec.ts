@@ -3,8 +3,8 @@ import { loginAs, nav, openVersion } from './helpers';
 
 // CLAUDE.md §7 的主要流程；資料都是 src/data/demoSeed.ts 的虛構示範資料
 
-test('建立菜品並送試菜、建立試菜場次', async ({ page }) => {
-  await loginAs(page, '示範主廚');
+test('建立菜品：填好用料與每份克重就能定版', async ({ page }) => {
+  await loginAs(page, '示範創辦人');
   await nav(page, '食譜');
   await page.getByRole('button', { name: '新增' }).click();
   const sheet = page.getByRole('dialog');
@@ -19,37 +19,63 @@ test('建立菜品並送試菜、建立試菜場次', async ({ page }) => {
   await page.getByRole('button', { name: '儲存草案' }).click();
   await expect(page.getByRole('button', { name: '已儲存' })).toBeVisible();
 
+  // 每份克重還沒填：定版前會提醒
   await page.getByRole('button', { name: '返回', exact: true }).last().click();
-  await page.getByRole('button', { name: '送試菜' }).click();
-  await page.getByRole('button', { name: '確認送試菜' }).click();
-  await expect(page.getByRole('heading', { name: /E2E 涼麵 v1/ }).getByText('試菜中')).toBeVisible();
+  await page.getByRole('button', { name: '定版', exact: true }).click();
+  await expect(page.getByRole('dialog').getByText('每份克重還沒填')).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: '取消' }).click();
 
-  await nav(page, '試菜');
-  await page.getByRole('link', { name: '建立場次' }).click();
-  await page.getByLabel('標題', { exact: true }).fill('E2E 第一輪');
-  await page.getByRole('button', { name: '加入版本' }).click();
-  await page.getByRole('button', { name: /E2E 涼麵/ }).click();
-  await page.getByRole('button', { name: /^v1/ }).click();
-  await page.getByRole('button', { name: '建立場次', exact: true }).click();
-  await expect(page.getByRole('link', { name: 'E2E 涼麵 v1' })).toBeVisible();
+  await page.getByRole('link', { name: '編輯草案' }).click();
+  await page.getByLabel(/每份克重/).first().fill('300');
+  await page.getByRole('button', { name: '儲存草案' }).click();
+  await expect(page.getByRole('button', { name: '已儲存' })).toBeVisible();
+  await page.getByRole('button', { name: '返回', exact: true }).last().click();
+  await page.getByRole('button', { name: '定版', exact: true }).click();
+  await page.getByRole('button', { name: '確認定版' }).click();
+  await expect(page.getByText('已定版，內容不可修改')).toBeVisible();
 });
 
-test('核准定版：資料庫寫入成本快照', async ({ page }) => {
-  await loginAs(page, '示範創辦人');
+test('定版：資料庫寫入成本快照；主廚沒有定版按鈕', async ({ page }) => {
+  await loginAs(page, '示範主廚');
   await openVersion(page, '招牌湯麵（示範）', 1);
-  await page.getByRole('button', { name: '送核准' }).click();
-  const confirm = page.getByRole('button', { name: '確認送核准' });
-  await expect(confirm).toBeDisabled();
-  await page.getByLabel('送審說明').fill('E2E 送審');
-  await confirm.click();
+  await expect(page.getByRole('link', { name: '編輯草案' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '定版', exact: true })).toHaveCount(0);
 
-  await page.getByRole('button', { name: '核准定版' }).click();
-  await page.getByRole('button', { name: '確認核准定版' }).click();
+  await page.getByRole('link', { name: '更多' }).click();
+  await page.getByRole('button', { name: '切換示範帳號' }).click();
+  await page.getByRole('button', { name: /示範創辦人/ }).click();
+  await openVersion(page, '招牌湯麵（示範）', 1);
+  await page.getByRole('button', { name: '定版', exact: true }).click();
+  await page.getByRole('button', { name: '確認定版' }).click();
   await expect(page.getByText('已定版，內容不可修改')).toBeVisible();
   await page.getByRole('tab', { name: '成本' }).click();
   const snapshot = page.getByRole('heading', { name: '定版時成本快照' }).locator('xpath=ancestor::section[1]');
   await expect(snapshot).toContainText('$27.2');
   await expect(snapshot).toContainText('31.8%');
+});
+
+test('缺單價也可以定版', async ({ page }) => {
+  await loginAs(page, '示範創辦人');
+  await nav(page, '食譜');
+  await page.getByRole('button', { name: '新增' }).click();
+  await page.getByRole('dialog').getByLabel('名稱', { exact: true }).fill('E2E 缺價格的麵');
+  await page.getByRole('dialog').getByRole('button', { name: '建立並編輯 v1 草案' }).click();
+  await expect(page.getByRole('heading', { name: '編輯 E2E 缺價格的麵 v1' })).toBeVisible();
+  await page.getByLabel(/每份克重/).first().fill('300');
+  await page.getByRole('button', { name: '原物料' }).click();
+  const picker = page.getByRole('dialog');
+  await picker.getByPlaceholder('搜尋原物料').fill('E2E 沒價格的料');
+  await picker.getByRole('button', { name: /快速新增/ }).click();
+  await picker.getByRole('button', { name: '新增並加入' }).click();
+  await page.getByLabel('E2E 沒價格的料 用量').fill('5');
+  await page.getByRole('button', { name: '儲存草案' }).click();
+  await expect(page.getByRole('button', { name: '已儲存' })).toBeVisible();
+
+  await page.getByRole('button', { name: '返回', exact: true }).last().click();
+  await page.getByRole('button', { name: '定版', exact: true }).click();
+  await expect(page.getByRole('dialog').getByText(/成本還不完整/)).toBeVisible();
+  await page.getByRole('button', { name: '確認定版' }).click();
+  await expect(page.getByText('已定版，內容不可修改')).toBeVisible();
 });
 
 test('修改已定版食譜：只能複製成新草案，舊定版不變', async ({ page }) => {
@@ -105,18 +131,6 @@ test('內場查看標準卡：份量換算、不顯示成本、可以列印', as
   });
   await page.getByRole('button', { name: '列印' }).click();
   expect(await page.evaluate(() => (window as unknown as { printed: boolean }).printed)).toBe(true);
-});
-
-test('測試人員評分：只看到指派給自己的項目', async ({ page }) => {
-  await loginAs(page, '示範試吃員乙');
-  await nav(page, '試菜');
-  await expect(page.getByRole('link', { name: '建立場次' })).toHaveCount(0);
-  const task = page.getByRole('link', { name: /招牌湯麵（示範）/ });
-  await expect(task).toContainText('待評分');
-  await task.click();
-  await page.getByRole('radiogroup', { name: '整體分數' }).getByRole('radio', { name: '4' }).click();
-  await page.getByRole('button', { name: '送出評分' }).click();
-  await expect(page.getByRole('link', { name: /招牌湯麵（示範）/ })).toContainText('已評 4 分');
 });
 
 test('開店時間表：新增項目、拖拉改日期', async ({ page }) => {

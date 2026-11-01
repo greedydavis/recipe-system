@@ -31,18 +31,6 @@ export function todayIso(): string {
   return parts;
 }
 
-export function formatScore(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '—';
-  return Number(value).toFixed(1).replace(/\.0$/, '');
-}
-
-export function formatSigned(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '—';
-  const n = Number(value);
-  const s = n.toFixed(1).replace(/\.0$/, '');
-  return n > 0 ? `+${s}` : s;
-}
-
 /**
  * 比例（0.07）→ 表單上的百分比字串（"7"）。用 Decimal 換算，避免 0.07 × 100 = 7.000000000000001。
  */

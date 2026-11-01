@@ -18,12 +18,6 @@ export interface Me {
   is_active: boolean;
 }
 
-export interface TeamMember {
-  id: string;
-  display_name: string;
-  role: Role;
-}
-
 /** 開店時間表的一個項目；結束日含當天 */
 export interface ScheduleTask {
   id: string;
@@ -38,7 +32,10 @@ export interface ScheduleTask {
   note: string;
 }
 
-export interface Profile extends TeamMember {
+export interface Profile {
+  id: string;
+  display_name: string;
+  role: Role;
   is_active: boolean;
   created_at: string;
 }
@@ -147,8 +144,6 @@ export interface VersionSummary {
   created_at: string;
   updated_at: string;
   created_by_name: string | null;
-  submitted_at: string | null;
-  submitted_by_name: string | null;
   approved_at: string | null;
   approved_by_name: string | null;
   retired_at: string | null;
@@ -156,9 +151,6 @@ export interface VersionSummary {
   retire_reason: string | null;
   superseded_by_version_id: string | null;
   superseded_by_version_no: number | null;
-  tasting_item_count: number;
-  feedback_count: number;
-  avg_overall: number | null;
 }
 
 export interface RecipeDetail {
@@ -276,145 +268,12 @@ export interface VersionDetail extends VersionSummary {
     created_at: string;
     created_by_name: string | null;
   }>;
-  tastings: Array<{
-    item_id: string;
-    session_id: string;
-    tasted_on: string;
-    session_title: string;
-    blind_label: string;
-    maker_name: string | null;
-    deviation_note: string;
-    conclusion: string;
-    decision: TastingDecision | null;
-    session_summary: string;
-    feedback_count: number;
-    avg_overall: number | null;
-    avg_saltiness: number | null;
-    avg_oiliness: number | null;
-    issues: string[];
-    suggestions: string[];
-  }>;
-}
-
-export interface Feedback {
-  id: string;
-  tasting_item_id: string;
-  taster_id: string | null;
-  taster_name: string;
-  taster_display: string | null;
-  entered_by: string | null;
-  entered_by_name: string | null;
-  score_overall: number;
-  score_flavor: number | null;
-  score_texture: number | null;
-  score_aroma: number | null;
-  score_appearance: number | null;
-  saltiness: number | null;
-  oiliness: number | null;
-  issues: string;
-  suggestions: string;
-  menu_ready: 'yes' | 'maybe' | 'no' | null;
-  created_at: string;
-  updated_at: string;
-  can_edit: boolean;
-}
-
-export type TastingDecision = 'next_round' | 'adjust' | 'drop' | 'ready';
-
-export interface TastingSessionListItem {
-  id: string;
-  tasted_on: string;
-  title: string;
-  location: string;
-  item_count: number;
-  feedback_count: number;
-  has_summary: boolean;
-  decided_count: number;
-  items: Array<{ recipe_name: string; version_no: number; blind_label: string }>;
-}
-
-export interface TastingItemDetail {
-  id: string;
-  version_id: string;
-  recipe_id: string;
-  recipe_name: string;
-  recipe_type: RecipeType;
-  version_no: number;
-  version_title: string;
-  version_status: VersionStatus;
-  blind_label: string;
-  maker_id: string | null;
-  maker_name: string | null;
-  maker_name_text: string;
-  deviation_note: string;
-  conclusion: string;
-  decision: TastingDecision | null;
-  assigned_testers: Array<{ id: string; display_name: string }>;
-  photos: Photo[];
-  feedback: Feedback[];
-  stats: {
-    count: number;
-    avg_overall: number | null;
-    avg_flavor: number | null;
-    avg_texture: number | null;
-    avg_aroma: number | null;
-    avg_appearance: number | null;
-    avg_saltiness: number | null;
-    avg_oiliness: number | null;
-    menu_ready_yes: number;
-    menu_ready_maybe: number;
-    menu_ready_no: number;
-  };
-}
-
-export interface TastingSessionDetail {
-  id: string;
-  tasted_on: string;
-  title: string;
-  location: string;
-  note: string;
-  summary: string;
-  created_by_name: string | null;
-  items: TastingItemDetail[];
-}
-
-export interface MyTastingTask {
-  item_id: string;
-  session_id: string;
-  tasted_on: string;
-  session_title: string;
-  display_name: string;
-  photos: Photo[];
-  my_feedback: Feedback | null;
-  can_submit: boolean;
 }
 
 export interface Dashboard {
-  role: Role;
-  my_open_tasting_tasks: number;
-  pending_approvals?: Array<{
-    version_id: string;
-    recipe_id: string;
-    recipe_name: string;
-    recipe_type: RecipeType;
-    version_no: number;
-    title: string;
-    submitted_at: string;
-    submitted_by_name: string | null;
-  }>;
-  testing_versions?: Array<{
-    version_id: string;
-    recipe_id: string;
-    recipe_name: string;
-    recipe_type: RecipeType;
-    version_no: number;
-    title: string;
-    updated_at: string;
-    feedback_count: number;
-  }>;
-  draft_count?: number;
-  missing_price_ingredients?: Array<{ id: string; name: string; code: string }>;
-  outdated_references?: Array<{
+  draft_count: number;
+  missing_price_ingredients: Array<{ id: string; name: string; code: string }>;
+  outdated_references: Array<{
     recipe_id: string;
     recipe_name: string;
     version_id: string;
@@ -424,7 +283,7 @@ export interface Dashboard {
     component_version_no: number;
     component_locked_version_no: number | null;
   }>;
-  recent_versions?: Array<{
+  recent_versions: Array<{
     version_id: string;
     recipe_id: string;
     recipe_name: string;

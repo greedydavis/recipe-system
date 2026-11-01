@@ -91,7 +91,7 @@ describe('操作紀錄', () => {
 });
 
 describe('基準版匯入', () => {
-  it('保留用料與步驟順序、菜品批次產量＝每份量、元件先建；送試菜失敗只留警告；重新匯入會全部略過', async () => {
+  it('保留用料與步驟順序、菜品批次產量＝每份量、元件先建；全部都是草案；重新匯入會全部略過', async () => {
     const file = {
       source: '測試檔',
       generated_at: '2026-10-02T00:00:00Z',
@@ -106,7 +106,6 @@ describe('基準版匯入', () => {
           name: '匯入菜',
           type: 'dish',
           menu_category: '湯麵',
-          to_testing: true,
           version: {
             title: '基準版',
             serving_qty: 600,
@@ -122,7 +121,6 @@ describe('基準版匯入', () => {
           name: '匯入湯',
           type: 'component',
           component_kind: 'soup',
-          to_testing: true,
           version: {
             title: '基準版',
             batch_output_qty: 10000,
@@ -139,7 +137,6 @@ describe('基準版匯入', () => {
         {
           name: '匯入待填菜',
           type: 'dish',
-          to_testing: true,
           version: { title: '基準版', lines: [{ ingredient: '匯入麵', quantity: null, unit: 'g' }], steps: [] },
         },
       ],
@@ -150,8 +147,7 @@ describe('基準版匯入', () => {
       { p_file: file },
     );
     expect(result).toMatchObject({ created_ingredients: 3, created_recipes: 3 });
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toContain('「匯入待填菜」無法送試菜，保留為草案');
+    expect(result.warnings).toEqual([]);
 
     type V = {
       status: string;
@@ -165,7 +161,7 @@ describe('基準版匯入', () => {
       return t.rpc<V>(t.users.chef, 'get_version', { p_id: r.latest.id });
     };
     const soup = await version('匯入湯', 'component');
-    expect(soup.status).toBe('testing');
+    expect(soup.status).toBe('draft');
     expect(soup.lines.map((l) => l.ingredient_name)).toEqual(['匯入骨', '匯入水']);
     expect(soup.steps.map((s) => [s.step_no, s.instruction])).toEqual([
       [1, '汆燙'],
@@ -173,7 +169,7 @@ describe('基準版匯入', () => {
       [3, '過濾'],
     ]);
     const dish = await version('匯入菜', 'dish');
-    expect(dish).toMatchObject({ status: 'testing', serving_qty: 600, batch_output_qty: 600 });
+    expect(dish).toMatchObject({ status: 'draft', serving_qty: 600, batch_output_qty: 600 });
     expect(dish.lines.map((l) => l.component_name ?? l.ingredient_name)).toEqual(['匯入湯', '匯入麵']);
     expect((await version('匯入待填菜', 'dish')).status).toBe('draft');
 
@@ -207,7 +203,6 @@ describe('基準版匯入', () => {
           name: '更新舊湯',
           type: 'component',
           component_kind: 'soup',
-          to_testing: true,
           version: {
             title: '基準版',
             batch_output_qty: 10000,
@@ -254,7 +249,6 @@ describe('基準版匯入', () => {
           previous_names: ['更新舊湯'],
           type: 'component',
           component_kind: 'soup',
-          to_testing: false,
           version: {
             title: '基準版',
             lines: [
@@ -268,7 +262,6 @@ describe('基準版匯入', () => {
           name: '更新待填醬',
           type: 'component',
           component_kind: 'sauce',
-          to_testing: false,
           version: { title: '基準版', lines: [{ ingredient: '更新肉', quantity: null, unit: 'g' }], steps: [] },
         },
         {
@@ -308,8 +301,7 @@ describe('基準版匯入', () => {
       '「更新新湯」新增 v2 草案（v1 保留不變）',
       '「更新菜」新增 v2 草案（v1 保留不變）',
     ]);
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toContain('「更新新菜」沒有帶入元件「更新待填醬」');
+    expect(result.warnings).toEqual([]);
 
     const versions = (name: string) =>
       t.sql<{ version_no: number; status: string; based_on: number | null; batch: string | null; lines: string[]; steps: string[] }>(
@@ -331,17 +323,17 @@ describe('基準版匯入', () => {
       );
     expect(await versions('更新舊湯')).toEqual([]);
     expect(await versions('更新新湯')).toEqual([
-      { version_no: 1, status: 'testing', based_on: null, batch: '10000', lines: ['更新骨 1000'], steps: ['熬'] },
+      { version_no: 1, status: 'draft', based_on: null, batch: '10000', lines: ['更新骨 1000'], steps: ['熬'] },
       // 檔案沒有填產量：沿用上一版量到的結果
       { version_no: 2, status: 'draft', based_on: 1, batch: '10000', lines: ['更新骨 待填', '更新肉 250'], steps: ['炸', '熬'] },
     ]);
-    // 菜品的新草案引用得到的還是已凍結的 v1（v2 是草案，不能引用）
+    // 菜品的新草案引用元件最新的草案；定版時才要求元件已定版
     expect(await versions('更新菜')).toEqual([
       { version_no: 1, status: 'draft', based_on: null, batch: null, lines: ['更新新湯 v1 300', '更新麵 90'], steps: [] },
-      { version_no: 2, status: 'draft', based_on: 1, batch: null, lines: ['更新新湯 v1 300', '更新麵 90', '更新肉 180'], steps: ['出餐：煎香'] },
+      { version_no: 2, status: 'draft', based_on: 1, batch: null, lines: ['更新新湯 v2 300', '更新麵 90', '更新肉 180'], steps: ['出餐：煎香'] },
     ]);
     expect(await versions('不變菜')).toHaveLength(1);
-    expect((await versions('更新新菜'))[0].lines).toEqual(['更新麵 90']);
+    expect((await versions('更新新菜'))[0].lines).toEqual(['更新待填醬 v1 待填', '更新麵 90']);
 
     const again = await t.rpc<Result>(t.users.founder, 'import_baseline', { p_file: second });
     expect(again).toMatchObject({ created_recipes: 0, updated_recipes: 0, skipped_recipes: 5, changes: [] });
@@ -406,7 +398,6 @@ async function buildGolden(prefix: string) {
       { line_kind: 'ingredient', ingredient_id: water.id, quantity: 30, unit: 'L' },
     ],
   });
-  await transition(t, t.users.chef, soup.versionId, 'testing');
 
   const dish = await createRecipe(t, { type: 'dish', name: `${prefix}湯麵` });
   await saveDraft(t, dish.versionId, {
@@ -441,7 +432,7 @@ describe('RPC 成本資料 + 前端計算 = 黃金範例', () => {
   });
 
   // CLAUDE.md §3：定版快照由資料庫重算，兩套實作都要對到同一組手算答案，才不會各算各的。
-  it('資料庫重算的成本快照，和前端算的黃金範例一致（湯底還在試菜中也一樣）', async () => {
+  it('資料庫重算的成本快照，和前端算的黃金範例一致（湯底還是草案也一樣）', async () => {
     const { soup, dish } = await buildGolden('伺服器黃金');
 
     expect(await snap(soup.versionId, 'batch_cost')).toBe(expected.soup.batchCost);
@@ -453,12 +444,6 @@ describe('RPC 成本資料 + 前端計算 = 黃金範例', () => {
 
   it('元件定版後原料漲價：菜品快照和前端一樣用今天的單價重算元件成本', async () => {
     const { soup, dish, onionSpec } = await buildGolden('漲價黃金');
-    const session = await t.rpc<string>(t.users.chef, 'create_tasting_session', {
-      p: { tasted_on: '2026-09-22', title: '漲價試菜', items: [{ version_id: soup.versionId, assigned_tester_ids: [t.users.tester] }] },
-    });
-    const detail = await t.rpc<{ items: Array<{ id: string }> }>(t.users.chef, 'get_tasting_session', { p_id: session });
-    await t.rpc(t.users.tester, 'submit_feedback', { p_item_id: detail.items[0].id, p: { score_overall: 4 } });
-    await transition(t, t.users.chef, soup.versionId, 'pending_approval', '送審');
     await transition(t, t.users.founder, soup.versionId, 'locked');
 
     // 湯底定版之後洋蔥漲價（生效日早於今天，所以今天有效）

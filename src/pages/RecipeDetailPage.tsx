@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { can, useRole } from '../app/auth';
 import { foodCostRateLabel, servingCostLabel, suggestedPriceLabel, useCosts } from '../app/costing';
-import { formatDate, formatScore, percentInputToRate, rateToPercentInput, todayIso, toNum } from '../app/format';
+import { formatDate, percentInputToRate, rateToPercentInput, todayIso, toNum } from '../app/format';
 import {
   Badge,
   Button,
@@ -132,11 +132,10 @@ export function RecipeDetailPage() {
                   <div className="truncate font-medium">{v.title || v.change_note || '（無標題）'}</div>
                   <div className="text-sm text-muted">
                     {v.status === 'locked' && v.approved_at
-                      ? `${formatDate(v.approved_at)} 由 ${v.approved_by_name ?? '—'} 核准`
+                      ? `${formatDate(v.approved_at)} 由 ${v.approved_by_name ?? '—'} 定版`
                       : v.status === 'retired'
                         ? `${formatDate(v.retired_at)} 停用${v.retire_reason ? `：${v.retire_reason}` : ''}`
                         : `${formatDate(v.created_at)} 建立${v.based_on_version_no ? `・複製自 v${v.based_on_version_no}` : ''}`}
-                    {v.feedback_count > 0 && `・${v.feedback_count} 筆評分，平均 ${formatScore(v.avg_overall)}`}
                   </div>
                 </div>
                 <StatusBadge status={v.status} />
