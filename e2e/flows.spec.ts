@@ -32,7 +32,7 @@ test('建立菜品：填好用料與每份克重就能定版', async ({ page }) 
   await page.getByRole('button', { name: '返回', exact: true }).last().click();
   await page.getByRole('button', { name: '定版', exact: true }).click();
   await page.getByRole('button', { name: '確認定版' }).click();
-  await expect(page.getByText('已定版，內容不可修改')).toBeVisible();
+  await expect(page.getByText('已定版，用料與份量不可修改')).toBeVisible();
 });
 
 test('定版：資料庫寫入成本快照；主廚沒有定版按鈕', async ({ page }) => {
@@ -47,7 +47,7 @@ test('定版：資料庫寫入成本快照；主廚沒有定版按鈕', async ({
   await openVersion(page, '招牌湯麵（示範）', 1);
   await page.getByRole('button', { name: '定版', exact: true }).click();
   await page.getByRole('button', { name: '確認定版' }).click();
-  await expect(page.getByText('已定版，內容不可修改')).toBeVisible();
+  await expect(page.getByText('已定版，用料與份量不可修改')).toBeVisible();
   await page.getByRole('tab', { name: '成本' }).click();
   const snapshot = page.getByRole('heading', { name: '定版時成本快照' }).locator('xpath=ancestor::section[1]');
   await expect(snapshot).toContainText('$27.2');
@@ -75,13 +75,41 @@ test('缺單價也可以定版', async ({ page }) => {
   await page.getByRole('button', { name: '定版', exact: true }).click();
   await expect(page.getByRole('dialog').getByText(/成本還不完整/)).toBeVisible();
   await page.getByRole('button', { name: '確認定版' }).click();
-  await expect(page.getByText('已定版，內容不可修改')).toBeVisible();
+  await expect(page.getByText('已定版，用料與份量不可修改')).toBeVisible();
+});
+
+test('修改已定版步驟文字：直接改，不產生新版本', async ({ page }) => {
+  await loginAs(page, '示範主廚');
+  await openVersion(page, '招牌湯底（示範）', 1, '元件');
+  await page.getByRole('tab', { name: /步驟/ }).click();
+  await page.getByRole('button', { name: '修改步驟 1 文字' }).click();
+  await page.getByRole('dialog').getByLabel('步驟說明').fill('大骨冷水下鍋汆燙，撈出後沖淨血水。');
+  await page.getByRole('dialog').getByRole('button', { name: '儲存' }).click();
+  await expect(page.getByText('已更新步驟文字')).toBeVisible();
+  await expect(page.getByText('大骨冷水下鍋汆燙，撈出後沖淨血水。')).toBeVisible();
+
+  await page.getByRole('link', { name: '標準卡／份量換算' }).click();
+  await expect(page.getByText('大骨冷水下鍋汆燙，撈出後沖淨血水。')).toBeVisible();
+
+  await nav(page, '食譜');
+  await page.getByRole('tab', { name: /元件/ }).click();
+  await page.getByRole('link', { name: /招牌湯底（示範）/ }).click();
+  await expect(page.getByRole('link', { name: /^v1/ })).toContainText('已定版');
+  await expect(page.getByRole('link', { name: /^v2/ })).toHaveCount(0);
+});
+
+test('店長看已定版步驟：沒有修改入口', async ({ page }) => {
+  await loginAs(page, '示範店長');
+  await openVersion(page, '招牌湯底（示範）', 1, '元件');
+  await page.getByRole('tab', { name: /步驟/ }).click();
+  await expect(page.getByText('大骨冷水下鍋汆燙，撈出沖淨。')).toBeVisible();
+  await expect(page.getByRole('button', { name: /修改步驟/ })).toHaveCount(0);
 });
 
 test('修改已定版食譜：只能複製成新草案，舊定版不變', async ({ page }) => {
   await loginAs(page, '示範主廚');
   await openVersion(page, '招牌湯底（示範）', 1, '元件');
-  await expect(page.getByText('已定版，內容不可修改')).toBeVisible();
+  await expect(page.getByText('已定版，用料與份量不可修改')).toBeVisible();
   await expect(page.getByRole('link', { name: '編輯草案' })).toHaveCount(0);
 
   await page.getByRole('button', { name: '複製為新版本' }).click();

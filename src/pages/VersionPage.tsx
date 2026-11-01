@@ -29,7 +29,7 @@ import {
   useToast,
 } from '../components/ui';
 import { rpc, useAction, useRpc } from '../data/api';
-import type { VersionDetail } from '../data/types';
+import type { VersionDetail, VersionStep } from '../data/types';
 import {
   formatBatchCost,
   formatLineCost,
@@ -91,8 +91,9 @@ export function VersionPage() {
 
       <div className="mb-4 space-y-2">
         {v.status === 'locked' && (
-          <Notice tone="ok" title={<span className="inline-flex items-center gap-1"><Lock className="size-4" aria-hidden />已定版，內容不可修改</span>}>
-            {formatDate(v.approved_at)} 由 {v.approved_by_name ?? '—'} 定版。要修改請「複製為新版本」。
+          <Notice tone="ok" title={<span className="inline-flex items-center gap-1"><Lock className="size-4" aria-hidden />已定版，用料與份量不可修改</span>}>
+            {formatDate(v.approved_at)} 由 {v.approved_by_name ?? '—'} 定版。
+            {can.editRecipes(role) && '步驟文字可以在「步驟」分頁直接改；其他內容要修改請「複製為新版本」。'}
           </Notice>
         )}
         {v.status === 'retired' && (
@@ -324,6 +325,8 @@ function LinesTab({ v, view, ingredients }: { v: VersionDetail; view?: CostView;
 function StepsTab({ v }: { v: VersionDetail }) {
   const role = useRole();
   const editable = v.status === 'draft' && can.editRecipes(role);
+  const textEditable = v.status === 'locked' && can.editRecipes(role);
+  const [editing, setEditing] = useState<VersionStep | null>(null);
   return (
     <div className="space-y-4">
       <Section title="成品照">
@@ -341,12 +344,24 @@ function StepsTab({ v }: { v: VersionDetail }) {
                     {s.step_no}
                   </div>
                   <div className="min-w-0 flex-1 space-y-1">
-                    <p className="whitespace-pre-wrap">{s.instruction || '（未填寫說明）'}</p>
+                    <div className="flex items-start gap-2">
+                      <p className="min-w-0 flex-1 whitespace-pre-wrap">{s.instruction || '（未填寫說明）'}</p>
+                      {textEditable && (
+                        <button
+                          type="button"
+                          aria-label={`修改步驟 ${s.step_no} 文字`}
+                          onClick={() => setEditing(s)}
+                          className="-mt-2 -mr-2 flex size-11 shrink-0 items-center justify-center rounded-xl text-brand-700 hover:bg-brand-50"
+                        >
+                          <Pencil className="size-4" aria-hidden />
+                        </button>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-2 text-sm">
                       {s.duration_minutes !== null && <Badge>{formatNumber(s.duration_minutes, 1)} 分鐘</Badge>}
                       {s.temperature_c !== null && <Badge>{formatNumber(s.temperature_c, 1)}°C</Badge>}
                       {s.heat_level && <Badge>{HEAT_LABEL[s.heat_level]}</Badge>}
-                      {s.is_critical && <Badge tone="danger">關鍵管制點{s.critical_note && `：${s.critical_note}`}</Badge>}
+                      {s.is_critical && <p className="w-full font-semibold text-red-700">關鍵管制點{s.critical_note && `：${s.critical_note}`}</p>}
                     </div>
                     {(s.photos.length > 0 || editable) && (
                       <PhotoStrip photos={s.photos} target={{ step_id: s.id }} canAdd={editable} canDelete={editable} />
@@ -375,7 +390,49 @@ function StepsTab({ v }: { v: VersionDetail }) {
           </div>
         </div>
       </Card>
+      {editing && <StepTextSheet step={editing} onClose={() => setEditing(null)} />}
     </div>
+  );
+}
+
+function StepTextSheet({ step, onClose }: { step: VersionStep; onClose: () => void }) {
+  const toast = useToast();
+  const [text, setText] = useState(step.instruction);
+  const save = useAction(() => rpc('update_locked_step', { p_step_id: step.id, p_instruction: text }));
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={`修改步驟 ${step.step_no} 文字`}
+      footer={
+        <>
+          <Button variant="secondary" className="shrink-0" onClick={onClose}>
+            取消
+          </Button>
+          <Button
+            block
+            loading={save.isPending}
+            disabled={!text.trim()}
+            onClick={() =>
+              save.mutate(undefined, {
+                onSuccess: () => {
+                  toast('已更新步驟文字');
+                  onClose();
+                },
+              })
+            }
+          >
+            儲存
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-muted">直接改這個版本，標準卡也會跟著變，不會產生新版本。時間、溫度、用料要改請複製為新版本。</p>
+      <Field label="步驟說明">{(id) => <Textarea id={id} value={text} onChange={(e) => setText(e.target.value)} rows={6} />}</Field>
+      <Link to={`/audit?table=recipe_steps&record=${step.id}`} className="inline-block min-h-11 py-2 text-sm text-brand-700">
+        查看這一步的修改紀錄 →
+      </Link>
+    </Sheet>
   );
 }
 
@@ -608,7 +665,7 @@ function TransitionSheet({
         <StatusBadge status={transition.to} />
       </div>
       {transition.to === 'locked' && (
-        <p className="text-sm text-muted">定版後內容不能再改，要改就複製為新版本；同一食譜舊的定版會自動退下來。</p>
+        <p className="text-sm text-muted">定版後只有步驟文字能直接改，其他內容要改就複製為新版本；同一食譜舊的定版會自動退下來。</p>
       )}
       {hints.length > 0 && (
         <Notice tone="warn" title="這些項目填齊才能定版">

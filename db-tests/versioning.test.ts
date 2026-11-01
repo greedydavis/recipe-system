@@ -84,7 +84,7 @@ describe('草案編輯與凍結', () => {
       ]),
       '內容已凍結',
     );
-    await expectError(t.sql(`update app.recipe_steps set instruction = 'x' where version_id = $1`, [soup.versionId]), '內容已凍結');
+    await expectError(t.sql(`update app.recipe_steps set duration_minutes = 1 where version_id = $1`, [soup.versionId]), '內容已凍結');
     await expectError(t.sql(`update app.recipe_versions set title = 'x' where id = $1`, [soup.versionId]), '內容已凍結');
     await expectError(t.sql(`update app.recipe_versions set notes = 'x' where id = $1`, [soup.versionId]), '內容已凍結');
     await expectError(
@@ -92,6 +92,73 @@ describe('草案編輯與凍結', () => {
       '內容已凍結',
     );
     await expectError(t.sql(`delete from app.recipe_versions where id = $1`, [soup.versionId]), '只有草案可以刪除');
+  });
+
+  describe('已定版的步驟文字可以直接改', () => {
+    const stepOf = async (versionId: string) =>
+      (await t.sql<{ id: string; instruction: string }>(`select id, instruction from app.recipe_steps where version_id = $1`, [versionId]))[0];
+    const edit = (user: string, stepId: string, text: string) =>
+      t.rpc(user, 'update_locked_step', { p_step_id: stepId, p_instruction: text });
+
+    it('創辦人與主廚可以改，並留下修改前後的操作紀錄；店長以下不行', async () => {
+      const soup = await soupLocked('改字測試湯');
+      const step = await stepOf(soup.versionId);
+      await edit(t.users.chef, step.id, '  汆燙去血水  ');
+      await edit(t.users.founder, step.id, '汆燙去血水後沖淨');
+      expect((await stepOf(soup.versionId)).instruction).toBe('汆燙去血水後沖淨');
+      await expectError(edit(t.users.manager, step.id, 'x'), '權限不足');
+      await expectError(edit(t.users.tester, step.id, 'x'), '權限不足');
+      await expectError(edit(t.users.pending, step.id, 'x'), '權限不足');
+
+      const logs = await t.sql<{ changed_fields: string[]; old_data: { instruction: string }; new_data: { instruction: string }; actor_id: string }>(
+        `select changed_fields, old_data, new_data, actor_id from app.audit_logs
+         where table_name = 'recipe_steps' and record_id = $1 and context = 'update_locked_step' order by id`,
+        [step.id],
+      );
+      expect(logs.map((l) => l.changed_fields)).toEqual([['instruction'], ['instruction']]);
+      expect(logs[0]).toMatchObject({ actor_id: t.users.chef, old_data: { instruction: '汆燙' }, new_data: { instruction: '汆燙去血水' } });
+    });
+
+    it('改字不影響定版狀態與成本快照，新版本會沿用改過的文字', async () => {
+      const soup = await soupLocked('改字快照湯');
+      const step = await stepOf(soup.versionId);
+      const snapshots = () => t.sql(`select * from app.cost_snapshots where version_id = $1`, [soup.versionId]);
+      const before = await snapshots();
+      await edit(t.users.chef, step.id, '汆燙兩次');
+      expect(await snapshots()).toEqual(before);
+      const v = await t.rpc<{ status: string }>(t.users.manager, 'get_version', { p_id: soup.versionId });
+      expect(v.status).toBe('locked');
+      const copyId = await t.rpc<string>(t.users.chef, 'copy_version', { p_source_id: soup.versionId, p_change_note: '' });
+      expect((await stepOf(copyId)).instruction).toBe('汆燙兩次');
+    });
+
+    it('只有文字放行：其他欄位、新增與刪除步驟都還是凍結', async () => {
+      const soup = await soupLocked('改字範圍湯');
+      const step = await stepOf(soup.versionId);
+      await expectError(edit(t.users.chef, step.id, '   '), '不能空白');
+      for (const set of [`duration_minutes = 1`, `temperature_c = 80`, `heat_level = 'high'`, `is_critical = true`, `critical_note = 'x'`, `step_no = 9`]) {
+        await expectError(t.sql(`update app.recipe_steps set ${set} where id = $1`, [step.id]), '內容已凍結');
+        await expectError(t.sql(`update app.recipe_steps set ${set}, instruction = 'x' where id = $1`, [step.id]), '內容已凍結');
+      }
+      await expectError(t.sql(`delete from app.recipe_steps where id = $1`, [step.id]), '內容已凍結');
+      await expectError(
+        t.sql(`insert into app.recipe_steps (version_id, step_no, instruction) values ($1, 2, 'x')`, [soup.versionId]),
+        '內容已凍結',
+      );
+    });
+
+    it('草案要用編輯草案、已停用不能改，找不到的步驟會報錯', async () => {
+      const draft = await soupDraft('改字草案湯');
+      await expectError(edit(t.users.chef, (await stepOf(draft.versionId)).id, 'x'), '只有已定版');
+
+      const soup = await soupLocked('改字停用湯');
+      const step = await stepOf(soup.versionId);
+      await transition(t, t.users.founder, soup.versionId, 'retired', '不用了');
+      await expectError(edit(t.users.chef, step.id, 'x'), '只有已定版');
+      await expectError(t.sql(`update app.recipe_steps set instruction = 'x' where id = $1`, [step.id]), '內容已凍結');
+
+      await expectError(edit(t.users.chef, '00000000-0000-0000-0000-000000000000', 'x'), '找不到此步驟');
+    });
   });
 
   it('資料庫層也擋下轉移表以外的狀態變更', async () => {
